@@ -21,16 +21,17 @@
 
 ---
 
-## 2. ❓决策点 A:技术栈怎么选
+## 2. ✅ 决策点 A:技术栈 —— 已定:**Flutter / Dart**
 
-| 方案 | 说明 | 优点 | 缺点 |
-|------|------|------|------|
-| **A1. Flutter** | 一套代码出安卓(以后能出 iOS) | 生态成熟、UI 漂亮;你熟悉的 mochi-pet 就是 Flutter | Dart 语言,不是你偏好的 Python |
-| **A2. 原生 Kotlin** | 安卓原生 | 性能最好、最"正统" | 学习曲线陡,只服务安卓 |
-| **A3. Python 套壳**(Kivy/BeeWare/Flet) | 用 Python 写安卓 | **你偏好 Python** | 打包 APK 麻烦、生态弱、行情库未必能用 |
-| **A4. 网页 App(PWA)+ 手机浏览器** | 后端 Python,前端网页,手机当浏览器开 | **复用你现有 yfinance 那套**;开发最快 | 严格说不是"APK",但能"添加到主屏幕"像 App |
+**结论:用 Flutter(Dart)写真·安卓 APK。** Java 直接排除(2026 新项目首选 Kotlin,不用 Java)。
 
-> 💡 我的倾向先抛出来:**如果你最看重"能快速跑通 + 复用现有 Python 行情代码"→ A4;如果你执意要真·APK 且愿学一点 → A1 Flutter。** 等你定。
+定它的核心理由:
+1. **复用 mochi-pet 经验** —— 同样用 Flutter,环境/打包 APK/签名/发布整套已趟过。
+2. **本 App 重头戏是 UI 展示**(股票卡片、估值表、K线、AI 报告排版),Flutter 控件丰富、`fl_chart` 画 K 线顺手,比原生省事。
+3. **网络请求(拉行情 + 调 Azure)两端一样轻松**,原生 Kotlin 的性能/体积优势在这个 App 上几乎用不到。
+4. 一套代码以后还能出 iOS。
+
+> 备忘:原本备选 A2 原生 Kotlin / A3 Python 套壳 / A4 网页 PWA,均已放弃。Python 偏好在这个项目让位于"复用现有 Flutter 经验"。
 
 ---
 
@@ -88,7 +89,7 @@
 
 ## 待办:等你拍板的问题清单
 
-- [ ] A. 技术栈:Flutter / Kotlin / Python套壳 / 网页App?
+- [x] A. 技术栈:**Flutter / Dart**(已定)
 - [ ] B. 数据源:自建后端(yfinance) / 免费API直连?
 - [ ] C. 量化指标:在 MVP 集合上还想加/减什么?
 - [ ] D. Azure 之外,要不要也兼容普通 OpenAI / DeepSeek?
