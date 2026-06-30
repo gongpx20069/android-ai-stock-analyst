@@ -84,8 +84,9 @@
 | 文档 | 内容 | 状态 |
 |------|------|------|
 | [`data-sources.md`](data-sources.md) | 行情数据源调研(决策点B) | ✅ 调研完成,待拍板 |
-| [`indicators.md`](indicators.md) | 量化指标(估值/支撑压力/技术,确定性) | ✅ 草案+实测,待拍板 |
+| [`indicators.md`](indicators.md) | 量化指标(估值/支撑压力/技术,确定性) | ✅ 草案+实测,部分已定 |
 | [`stock-screening.md`](stock-screening.md) | 选股流水线(漏斗+估值打分) | ✅ 草案,待拍板 |
+| [`ux-design.md`](ux-design.md) | UX 交互设计(页面/旅程/行为对冲) | ✅ 草案,待拍板 |
 | [`visualization.md`](visualization.md) | 可视化设计(估值图为主) | ✅ 草案,待拍板 |
 | [`ml-prediction.md`](ml-prediction.md) | ML 股价预测(可选,辅助信号) | ✅ 草案,待拍板 |
 | [`github-benchmark-and-plan.md`](github-benchmark-and-plan.md) | GitHub 对标 + 最合适方案 | ✅ 调研完成,待拍板 |
