@@ -1,0 +1,21 @@
+# deps
+node_modules/
+.venv/
+__pycache__/
+*.pyc
+
+# secrets (BYOK keys 绝不入库)
+.env
+*.key
+local.properties
+
+# build
+build/
+dist/
+*.apk
+*.aab
+
+# os/editor
+.DS_Store
+.idea/
+.vscode/
