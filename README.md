@@ -22,4 +22,11 @@
 ## 文档
 
 - [`docs/architecture.md`](docs/architecture.md) — 架构选型与待定决策(讨论主战场)
-- 后续:`docs/data-sources.md`、`docs/ai-prompt.md`、`docs/mvp-scope.md`(随讨论补充)
+- [`docs/data-sources.md`](docs/data-sources.md) — 行情数据源调研(2026 实测横评)
+- [`docs/indicators.md`](docs/indicators.md) — 量化指标(估值/支撑压力4算法/技术面)
+- [`docs/stock-screening.md`](docs/stock-screening.md) — 选股流水线(漏斗 + 估值打分)
+- [`docs/ux-design.md`](docs/ux-design.md) — UX 交互设计(页面架构 + 用户旅程 + 行为对冲)
+- [`docs/visualization.md`](docs/visualization.md) — 可视化设计(估值图为主)
+- [`docs/ml-prediction.md`](docs/ml-prediction.md) — ML 股价预测(可选,辅助信号)
+- [`docs/github-benchmark-and-plan.md`](docs/github-benchmark-and-plan.md) — GitHub 对标 + 最合适方案
+- 后续:`docs/ai-prompt.md`(AI prompt 模板,随讨论补充)
