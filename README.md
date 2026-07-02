@@ -17,11 +17,13 @@
 
 ## 状态
 
-🚧 设计讨论中 — 见 [`docs/architecture.md`](docs/architecture.md)
+🚧 设计阶段(尚无代码)— 所有决策(已定/待拍板)集中在 [`docs/architecture.md`](docs/architecture.md) 决策台账
 
 ## 文档
 
-- [`docs/architecture.md`](docs/architecture.md) — 架构选型与待定决策(讨论主战场)
+> **单一出处**:全项目所有决策统一登记在 `architecture.md` §3 决策台账,子文档不再各自散落决策清单。看项目从 `architecture.md` 入手。
+
+- [`docs/architecture.md`](docs/architecture.md) — **架构中枢 + 决策台账**(核心矛盾 + 全项目已定/待定决策 + 文档索引,从这里开始)
 - [`docs/data-sources.md`](docs/data-sources.md) — 行情数据源调研(2026 实测横评)
 - [`docs/indicators.md`](docs/indicators.md) — 量化指标(估值/支撑压力4算法/技术面)
 - [`docs/stock-screening.md`](docs/stock-screening.md) — 选股流水线(漏斗 + 估值打分)
