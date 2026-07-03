@@ -25,8 +25,8 @@ restating their content.
 
 - `docs/architecture.md` — decision log & open questions (**start here**)
 - `docs/data-sources.md` — 2026 quote-API research (Tencent / Sina / yfinance)
-- `docs/analysis.md` — valuation + 4 support/resistance algorithms + technicals, screening funnel & scoring, GitHub benchmark + 3+1 multi-agent, LightGBM auxiliary signal
-- `docs/design.md` — page architecture, user journey, behavioral hedging, chart specs (valuation-first)
+- `docs/analysis.md` — quant/AI methods: valuation & support-resistance, screening, multi-agent, ML
+- `docs/design.md` — product design: pages, user journey, behavioral hedging, charts
 - `docs/design-system/ai-stock-analyst/MASTER.md` — design tokens (color/type/spacing/charts)
 
 ## Locked decisions (do NOT silently override)
@@ -60,7 +60,8 @@ restating their content.
 - Branch `main` (auto-deploy). Commits = **Conventional Commits with Chinese descriptions**,
   e.g. `docs(ux): 定稿反直觉配色语义`.
 - Read a file before editing it; make focused patches; keep `docs/` orderly and cross-linked.
-  When adding/removing a `docs/` file, update the index in `README.md`.
+  When adding/removing/renaming a `docs/` file, update **all three** indexes in sync:
+  `README.md`, this file's Repo map, and `docs/architecture.md` §4.
 - **Verify, don't assert**: docs stage has no test suite — verify by re-reading changed
   files and checking cross-doc links. Once Flutter is scaffolded the check becomes
   `flutter analyze && flutter test`; a Python backend adds `pytest`. Show the command +
