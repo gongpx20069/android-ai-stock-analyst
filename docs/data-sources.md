@@ -7,11 +7,9 @@
 
 ## 1. TL;DR(一句话结论)
 
-⚠️ **核心矛盾被实测确认了**:你的估值纪律第一指标是「**分析师目标价 → 上行空间%**」,而 **2026 年几乎所有免费行情 API 的"分析师目标价"都已转为付费**(Finnhub 也是)。**唯一能免费、完整拿到目标价+评级+前瞻PE 的来源是 Yahoo Finance(yfinance)**——但它是 Python 库,**安卓端不能直接跑**。
+⚠️ **核心矛盾被实测确认了**:你的估值纪律第一指标是「**分析师目标价 → 上行空间%**」,而 **2026 年几乎所有免费行情 API 的"分析师目标价"都已转为付费**(Finnhub 也是)。**唯一能免费、完整拿到目标价+评级+前瞻PE 的来源是 Yahoo Finance(yfinance)**——但它是 Python 库,**安卓端不能直接跑**,必须有一层后端包它。
 
-→ 这把决策推向一个**关键二选一**(见 §6):
-- **方案①(推荐):** 自建一个极薄后端(FastAPI 包一层 yfinance),App 调它 → 能拿全字段,符合你的框架。
-- **方案②(纯无服务器):** App 直连 Finnhub 免费档 → 拿不到目标价,**算不出上行空间%**,你的核心指标缺失。
+→ 由此收敛出三个方案(详见 §6),**结论:首选③(国内价直连 + yfinance 薄后端取基本面)**,既拿全你要的字段,又让国内实时价体验最好。
 
 ---
 
@@ -38,13 +36,13 @@
 
 ## 3. 关键发现:免费档"分析师目标价"几乎全军覆没
 
-这是本次调研最重要的一点,直接戳中你的框架:
+直接戳中你的框架(第一指标是上行空间%):
 
-- **Finnhub**:`Price Target` 和 `Upgrade/Downgrade` 端点在文档侧栏明确标 **Premium(付费)**。免费只剩 `Recommendation Trends`(给出 strongBuy/buy/hold/sell/strongSell 的**分析师家数**,不是目标价)。
-- **FMP**:`Price Target Consensus` 端点存在,但免费档(250/天、仅EOD、"Profile and Reference Data")是否含它**不确定**,需拿 key 实测;FMP 近年持续把免费端点上收。
-- **其它**(Alpha Vantage/Twelve Data/Alpaca/Polygon):要么没有目标价,要么质量差/受限。
+- **Finnhub**:`Price Target`/`Upgrade-Downgrade` 已标 Premium。免费只剩 `Recommendation Trends`(分析师**家数**,非目标价)。
+- **FMP**:`Price Target Consensus` 存在,但免费档是否含它不确定,需实测;近年持续上收免费端点。
+- **其它**(Alpha Vantage/Twelve Data/Alpaca/Polygon):要么没目标价,要么质量差/受限。
 
-✅ **唯独 yfinance 免费给全**:`targetMedianPrice`(中位目标价)、`numberOfAnalystOpinions`(分析师数)、`recommendationKey`(评级)、`forwardPE`(前瞻PE)一应俱全。
+✅ **唯独 yfinance 免费给全**:`targetMedianPrice`、`numberOfAnalystOpinions`、`recommendationKey`、`forwardPE` 一应俱全。
 
 ---
 
@@ -153,19 +151,11 @@
 | 开发量 | 小 | 中 | 中(两源对齐) |
 | 数据稳定性 | 中(Yahoo会改版) | 高 | ✅ 高(价格层不依赖Yahoo) |
 
----
-
-## 7. 我的建议
-
-🎯 **首选方案③(国内价 + yfinance 基本面),其次方案①。**
-
-理由:你这个 App 的灵魂是"按我的估值纪律分析",纪律离不开**分析师目标价/上行空间%**(只有 yfinance 免费给全);同时你人在国内、要手机随时看,**实时价用腾讯/新浪直连体验最好、且不依赖后端能否翻墙连 Yahoo**。方案③把"易变的价格"和"慢变的分析师数据"分层,既稳又省——分析师数据每天后台拉一次缓存即可,调用量极小。
-
-> 若想再简化:退回方案①(后端一把抓 yfinance)也行,代价是实时价也走后端、国内访问 Yahoo 稳定性要验证。方案②因缺目标价,**不推荐**。
+> **结论**:③ 各取所长 → 价格用国内源(快/稳/免key)、基本面用 yfinance(唯一免费给全),完全符合估值纪律。TL;DR 已给最终建议,不再另起一节。
 
 ---
 
-## 待办(技术落点,非决策)
+## 7. 待办(技术落点,非决策)
 
 > 数据源方案选择(决策 B)已登记到 [`architecture.md` §3](architecture.md#3-决策台账全项目唯一决策出处)。这里只留**定了方案后要做的技术活**:
 
