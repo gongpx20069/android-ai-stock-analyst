@@ -25,11 +25,7 @@
 
 - [`docs/architecture.md`](docs/architecture.md) — **架构中枢 + 决策台账**(核心矛盾 + 全项目已定/待定决策 + 文档索引,从这里开始)
 - [`docs/data-sources.md`](docs/data-sources.md) — 行情数据源调研(2026 实测横评)
-- [`docs/indicators.md`](docs/indicators.md) — 量化指标(估值/支撑压力4算法/技术面)
-- [`docs/stock-screening.md`](docs/stock-screening.md) — 选股流水线(漏斗 + 估值打分)
-- [`docs/ux-design.md`](docs/ux-design.md) — UX 交互设计(页面架构 + 用户旅程 + 功能↔UX映射 + 行为对冲)
+- [`docs/analysis.md`](docs/analysis.md) — 分析与 AI 方法(量化指标/支撑压力4算法/技术面 + 选股流水线 + GitHub对标与多智能体 + ML辅助信号)
+- [`docs/design.md`](docs/design.md) — 产品设计(页面架构 + 用户旅程 + 功能↔UX映射 + 行为对冲 + 图表清单)
 - [`docs/design-system/ai-stock-analyst/MASTER.md`](docs/design-system/ai-stock-analyst/MASTER.md) — 设计系统底座(配色/字体/间距/触控/图表规格,ui-ux-craft-kit 落地)
-- [`docs/visualization.md`](docs/visualization.md) — 可视化设计(估值图为主)
-- [`docs/ml-prediction.md`](docs/ml-prediction.md) — ML 股价预测(可选,辅助信号)
-- [`docs/github-benchmark-and-plan.md`](docs/github-benchmark-and-plan.md) — GitHub 对标 + 最合适方案
 - 后续:`docs/ai-prompt.md`(AI prompt 模板,随讨论补充)

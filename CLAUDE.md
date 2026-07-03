@@ -25,13 +25,9 @@ restating their content.
 
 - `docs/architecture.md` — decision log & open questions (**start here**)
 - `docs/data-sources.md` — 2026 quote-API research (Tencent / Sina / yfinance)
-- `docs/indicators.md` — valuation + 4 support/resistance algorithms + technicals
-- `docs/stock-screening.md` — screening funnel + valuation scoring
-- `docs/ux-design.md` — page architecture, user journey, behavioral hedging
+- `docs/analysis.md` — valuation + 4 support/resistance algorithms + technicals, screening funnel & scoring, GitHub benchmark + 3+1 multi-agent, LightGBM auxiliary signal
+- `docs/design.md` — page architecture, user journey, behavioral hedging, chart specs (valuation-first)
 - `docs/design-system/ai-stock-analyst/MASTER.md` — design tokens (color/type/spacing/charts)
-- `docs/visualization.md` — chart specs (valuation-first)
-- `docs/ml-prediction.md` — optional LightGBM direction probability (auxiliary only)
-- `docs/github-benchmark-and-plan.md` — competitor benchmark + chosen AI architecture
 
 ## Locked decisions (do NOT silently override)
 
@@ -51,7 +47,7 @@ restating their content.
 - **Reversed color semantics**: 🔴 red = *expensive / chasing-high* (NOT "price down");
   🟢 green = *has upside room* (NOT "price up"). Deliberate behavioral hedge against the
   owner's buy-the-dip instinct. Color must **never** carry meaning alone — always pair
-  with ↑↓ icon + text label (accessibility). Details in `docs/ux-design.md`.
+  with ↑↓ icon + text label (accessibility). Details in `docs/design.md`.
 - **Use the median (not mean) analyst target price**; upside% = median target ÷ current − 1.
 - **Never commit secrets**: BYOK keys, `.env`, `*.key`, `local.properties` are gitignored —
   keep it that way.

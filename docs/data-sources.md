@@ -80,7 +80,7 @@
 
 ---
 
-## 5. GitHub 生态参考(详见 [`github-benchmark-and-plan.md`](github-benchmark-and-plan.md))
+## 5. GitHub 生态参考(详见 [`analysis.md` §3](analysis.md#3-github-对标与多智能体方案))
 
 - **go-stock(⭐6600+)**:桌面端,证明"软件免费 + 自己 key"模式成立,但**不在手机端取数**,绕开了本难题。
 - **orthogonal.info 实测博主**最终用 **Finnhub(实时价)+ Polygon(EOD)+ yfinance(每周基本面)** 混用——印证"没有单一免费源能全包",基本面/分析师数据靠 yfinance。本文方案③即其"价格源+基本面源分离"的国内优化版。
