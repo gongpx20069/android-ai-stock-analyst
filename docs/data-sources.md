@@ -60,6 +60,17 @@
 
 ---
 
+## 3.6 腾讯实时行情图接口(详情页实时行情图数据源)
+
+> 2026-07-04 实测 **code:0**。详情页「实时行情图」(分时/日K/周K/月K + LightGBM 方向预测叠加)完全走**方案③国内价层,无需 yfinance**。US 代码 = 前缀 `us` + **大写**代码,**不加 `.OQ` 后缀**。
+
+- **当日分时**:`GET https://web.ifzq.gtimg.cn/appstock/app/minute/query?code=usAAPL` → `data.usAAPL.data.data` = `["HHMM 价 量", ...]`
+- **日/周/月K**:`GET https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param=usAAPL,day|week|month,,,N,qfq` → `data.usAAPL.day` = `[[日期,开,收,高,低,量], ...]`
+- **分钟K(60/30/15分)**:`GET https://web.ifzq.gtimg.cn/appstock/app/kline/kline?param=usAAPL,m60|m30|m15,,,N`
+- 刷新节奏见 [`design.md` §7](design.md#7-状态设计空加载错误)(分时 30–60s 轮询/下拉、日周月K 收盘后);方向预测叠加与推理节奏见 [`analysis.md` §4.3](analysis.md#43-结果可视化与产品红线)。
+
+---
+
 ## 4. 实测证据:yfinance 拉你持仓(2026-06-30 真跑)
 
 用 `yfinance` 实跑你持有的三只,字段全部拿到,完全够支撑你的估值纪律:
