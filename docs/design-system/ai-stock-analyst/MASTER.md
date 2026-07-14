@@ -1,137 +1,156 @@
-# Design System Master File — AI Stock Analyst
+# Design System Master File - AI Stock Analyst
 
-> **LOGIC:** 构建某个具体页面时,先查 `design-system/pages/[page-name].md`。
-> 若该文件存在,其规则**覆盖**本 Master;否则严格遵循下面的规则。
+> **Logic:** check [`../../design.md`](../../design.md) first for page structure
+> and interaction flow, then use this Master file for the concrete visual
+> values. Page-level specifications may override only their own surface and must
+> link back to this file.
 >
-> **来源:** 由 `ui-ux-craft-kit` skill 数据库检索落地(Fintech/Crypto 品类 + Modern Dark 风格),
-> 并按本项目"估值优先 / 反直觉红绿 / 行为对冲"立场做了语义层扩展。所有文本色都过了 WCAG 实测。
+> **Scope:** this file is the sole owner of exact visual tokens,
+> accessibility requirements, and chart semantics.
 
 ---
 
-**Project:** AI Stock Analyst(美股估值分析 Android App,Flutter/Dart)
+**Project:** AI Stock Analyst, a US-stock valuation Android app built with
+Kotlin and Jetpack Compose
+
 **Category:** Fintech/Crypto
+
 **Style:** Modern Dark (Cinema Mobile)
-**Platform:** Mobile-first(单手竖屏为主)
+
+**Platform:** Mobile-first, primarily one-handed portrait use
 
 ---
 
-## 1. 颜色调色板(Fintech/Crypto·暗色)
+## 1. Color palette for dark mode
 
-> 直接取自 skill 的 Fintech/Crypto 配色方案(“Gold trust + purple tech”)。金色=信任/CTA,紫色=科技/AI。
+Gold signals trust and CTA energy; purple signals technology and AI.
 
-| 角色 | Hex | Flutter/Token | 说明 |
+| Role | Hex | Compose token | Notes |
 |------|-----|---------------|------|
-| Background 页面底 | `#0F172A` | `--bg` | 深蓝黑,避免纯 `#000000`(OLED 拖影) |
-| Card 卡片 | `#222735` | `--card` | 信息最密处,所有文本色都按它实测对比度 |
-| Muted 次级面 | `#272F42` | `--muted` | 折叠区块/次级背景 |
-| Foreground 前景 | `#F8FAFC` | `--fg` | 主文本,14.24:1(AAA) |
-| Muted-fg 弱化 | `#94A3B8` | `--muted-fg` | **次要价格/时间戳**,5.81:1(AA) |
-| Border 描边 | `#334155` | `--border` | 分隔线/输入框 |
-| Primary/CTA 金 | `#F59E0B` | `--primary` | 主按钮/关键操作,On=`#0F172A` |
-| Secondary 亮金 | `#FBBF24` | `--secondary` | 次级强调,On=`#0F172A` |
-| Accent/AI 紫 | `#8B5CF6` | `--accent` | AI/多智能体标识块,On=`#FFFFFF` |
-| Destructive 红 | `#EF4444` | `--destructive` | 危险操作/删除,On=`#FFFFFF` |
-| Ring 焦点环 | `#F59E0B` | `--ring` | 输入聚焦/键盘焦点 |
+| Page background | `#0F172A` | `AppColors.background` | Deep blue-black to avoid pure `#000000` OLED smearing |
+| Card surface | `#222735` | `AppColors.surface` | Highest information-density zone; all text contrast is checked against it |
+| Muted surface | `#272F42` | `AppColors.surfaceVariant` | Folded blocks and secondary backgrounds |
+| Foreground text | `#F8FAFC` | `AppColors.onBackground` | Primary text, 14.24:1 contrast (AAA) |
+| Muted foreground | `#94A3B8` | `AppColors.onSurfaceMuted` | Secondary price text and timestamps, 5.81:1 contrast (AA) |
+| Border / outline | `#334155` | `AppColors.outline` | Dividers and input outlines |
+| Primary CTA gold | `#F59E0B` | `AppColors.primary` | Main buttons and key actions; on-color is `#0F172A` |
+| Secondary bright gold | `#FBBF24` | `AppColors.secondary` | Secondary emphasis; on-color is `#0F172A` |
+| AI accent purple | `#8B5CF6` | `AppColors.aiAccent` | AI and multi-agent identity blocks; on-color is `#FFFFFF` |
+| Destructive red | `#EF4444` | `AppColors.error` | Dangerous actions and delete states; on-color is `#FFFFFF` |
+| Focus ring | `#F59E0B` | `AppColors.focusRing` | Input focus and keyboard focus ring |
 
-## 2. 语义层:反直觉估值配色(本项目灵魂)
+<a id="2-semantic-layer-reversed-valuation-colors-the-projects-core"></a>
+## 2. Semantic layer: reversed valuation colors, the project's core
 
-> **红 ≠ 跌、绿 ≠ 涨。** 颜色对齐**估值**,不对齐价格方向 —— 对冲用户“跌了就想买/追涨”的本能。
-> ⚠️ 铁律(来自 skill UX「Color Only」High):颜色**永不单独承载含义**,必须同时配**图标 + 文字标签**(↑↓、"有空间/偏贵"),兼顾色盲。
+> **Red does not mean down, and green does not mean up.** Color maps to
+> **valuation**, not to price direction. Pair every semantic color with text and
+> iconography so color never carries meaning alone.
 
-| 语义 | 文本色(对卡片) | 块/边框 | 图标+文字(必带) | 触发 |
+| Semantic meaning | Text color on card | Block / border | Required icon + text | Trigger |
 |------|----------------|---------|-------------------|------|
-| **有上行空间(便宜)** | `#4ADE80` 8.55:1 AAA | `#22C55E` | ▲ + “上行空间 XX%” | 中位目标价 ÷ 现价 高 |
-| **偏贵/追高(危险)** | `#F87171` 5.39:1 AA | `#EF4444` | ▼ + “已接近/超目标价” | 现价 ≥ 目标价 |
-| **接近目标(中性偏警惕)** | `#FBBF24` 8.92:1 AAA | `#FBBF24` | ● + “接近合理” | 上行空间收窄 |
-| **AI / 模型信号** | `#A78BFA` 5.47:1 AA | `#8B5CF6` | ✦ + “AI/概率” | 多智能体、ML 概率 |
+| **Has upside / cheap** | `#4ADE80` at 8.55:1 AAA | `#22C55E` | ▲ + `Upside XX%` | Median target price is materially above current price |
+| **Expensive / chasing risk** | `#F87171` at 5.39:1 AA | `#EF4444` | ▼ + `At or above target` | Current price is at or above target |
+| **Near target / cautious neutral** | `#FBBF24` at 8.92:1 AAA | `#FBBF24` | ● + `Near fair value` | Upside has narrowed |
+| **AI / model signal** | `#A78BFA` at 5.47:1 AA | `#8B5CF6` | ✦ + `AI / probability` | Multi-agent output or ML signal |
 
-## 3. 字体(Dashboard Data 搭配)
+## 3. Typography for dashboard data pairing
 
-- **数字/数据 = Fira Code(等宽)**:价格、PE、涨跌幅、目标价 —— 等宽让数字**竖向对齐**、抖动不跳位。
-- **标签/正文 = Fira Sans**:界面文案、解读文字。
-- Mood:dashboard / data / analytics / precise。
+- **Numbers and data use Fira Code** so prices, P/E values, percentages, and
+  target prices stay vertically aligned and do not visually jump.
+- **Labels and body copy use Fira Sans** for interface text and longer
+  interpretation blocks.
 
-```css
-@import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&family=Fira+Sans:wght@300;400;500;600;700&display=swap');
+Package the font files as Android resources so the APK never depends on runtime
+Google Fonts access:
+
+```kotlin
+val DataFontFamily = FontFamily(/* Fira Code font resources */)
+val TextFontFamily = FontFamily(/* Fira Sans font resources */)
 ```
-```dart
-// Flutter
-fontFamilyData: 'Fira Code'  // 价格、百分比、PE、目标价
-fontFamilyText: 'Fira Sans'  // 标签、解读、按钮
-```
 
-### 字号阶梯(modular scale,来自 skill UX「Font Size Scale」)
+### Type scale
 
-`12 · 14 · 16 · 18 · 24 · 32`(sp)。禁止随意中间值。正文/输入 ≥16sp(防 iOS/安卓聚焦缩放)。
+Use the modular scale `12 / 14 / 16 / 18 / 24 / 32` in `sp`. Avoid ad hoc
+intermediate sizes. Body and form input text default to at least `16sp`. Helper
+labels may use `12sp` or `14sp`, but they must remain readable and respect
+system font scaling.
 
-## 4. 间距 / 圆角 / 阴影
+## 4. Spacing, radius, and elevation
 
-| Token | 值 | 用途 |
+| Token | Value | Use |
 |-------|----|----|
-| `--space-xs` | 4px | 紧凑间隙 |
-| `--space-sm` | 8px | **触控目标最小间距**(见 §6) |
-| `--space-md` | 16px | 标准内边距 |
-| `--space-lg` | 24px | 区块内边距 |
-| `--space-xl` | 32px | 大间隙 |
-| radius | 12–16px | 卡片 12,弹窗 16 |
-| shadow-md | `0 4px 6px rgba(0,0,0,.4)` | 卡片(暗色下加深) |
-| shadow-lg | `0 10px 15px rgba(0,0,0,.5)` | 弹窗/下拉 |
+| `spaceXs` | 4dp | Tight gaps |
+| `spaceSm` | 8dp | Minimum spacing between touch targets, see §6 |
+| `spaceMd` | 16dp | Standard inner padding |
+| `spaceLg` | 24dp | Section padding |
+| `spaceXl` | 32dp | Large gaps |
+| `radius` | 12-16dp | Cards use 12dp, dialogs 16dp |
+| `elevationMd` | 4dp | Cards |
+| `elevationLg` | 10dp | Dialogs and dropdowns |
 
-## 5. 图表配色规则(fl_chart)
+## 5. Chart color rules for Vico plus Compose overlays
 
-> 图表方向≠估值,**必须与 §2 语义解耦**,避免“K线红=跌”与“红=贵”打架。
+> Chart direction is not the same as valuation, so chart styling **must stay
+> decoupled from the valuation semantics in §2**.
 
-| 图表 | 选型(skill) | 配色规则 | A11y 回退 |
+| Chart | Preferred form | Color rule | Accessibility fallback |
 |------|-------------|---------|-----------|
-| **K线 OHLC** | Candlestick | **中性单色 + 实心/空心区分涨跌**(`#CBD5E1` 描边 10:1),不用红绿 → 把红绿留给估值 | OHLC 数据表 + 当日涨跌% |
-| **现价 vs 目标价** | Bullet / Gauge | 质量区间**便宜(绿)→合理(黄)→贵(红)**,业绩条金 `#F59E0B`,目标 marker `#F8FAFC` | 数值+“距目标 XX%”文字常显 |
-| **ML 涨跌概率** | Gauge | **中性轨道 + 紫/金弧**(不用估值红绿),概率数字常显 | 数值 + % 文字 + ARIA live |
-| **ML 预测带** | Line + 置信带 | 实际实线 `#CBD5E1`,预测虚线紫 `#A78BFA`,置信带 15% 透明 | actual/forecast 可独立开关,图例带线型描述 |
-| **选股排名/对比** | Bar(横向,降序) | 每条按上行空间着 §2 语义色,数值标签常显 | 数值标签常显 + CSV |
+| **OHLC candle chart** | Candlestick | Neutral single hue plus hollow/filled difference using `#CBD5E1` outlines at strong contrast | OHLC data table plus daily percent move |
+| **Current price vs target** | Bullet chart or gauge | Quality zones use cheap green -> fair yellow -> expensive red, with the value bar in gold `#F59E0B` and target marker in `#F8FAFC` | Always show the numbers and `distance to target XX%` text |
+| **ML direction probability** | Gauge | Neutral track plus purple/gold arc instead of valuation red/green; keep the numeric probability visible | Number, percent label, and Compose `liveRegion` |
+| **LightGBM probability line** | Line in a labeled sub-panel or on a clearly separated secondary scale | Use a purple line `#8B5CF6` with a gold latest-point marker `#F59E0B`; label horizon, `asOf`, and model version; do not draw fake future candles or future price paths | The layer can be turned off, and TalkBack reads the probability, time, and model version |
+| **Screening ranking / comparison** | Horizontal descending bars | Color each row by the upside semantic from §2 and keep value labels visible | Visible value labels plus CSV export if needed |
 
-## 6. 移动端 UX 铁律(来自 skill UX 数据库,标注严重度)
+## 6. Mobile UX rules
 
-| 规则 | 值 | 严重度 |
+| Rule | Value | Severity |
 |------|----|-------|
-| **触控目标** | ≥44px;本项目统一 **48dp**(同时满足 WCAG 44 与 Material 48) | High |
-| **触控间距** | 相邻可点元素 ≥8px | Medium |
-| **手势** | 主内容**竖向滚动优先**;不用横滑切主 Tab、不覆盖系统手势 | Medium |
-| **移动键盘** | 数字用 `inputmode=numeric`,价格阈值用 `decimal` | Medium |
-| **确认对话框** | 删自选股 / 清 API Key 等不可逆操作必须二次确认 | High |
-| **颜色对比** | 正文 ≥4.5:1(已全实测) | High |
-| **不只靠颜色** | 红绿估值必配 ↑↓ 图标 + 文字 | High |
-| **减少动效** | 尊重 `prefers-reduced-motion` / 系统“减弱动态效果” | High |
-| **加载态** | 骨架屏 / spinner,禁止界面冻结无反馈 | High |
-| **空状态** | 空自选股 → 引导文案 + “添加”按钮 | Medium |
-| **实时校验** | API 配置表单 onBlur 校验,不只在提交时 | Medium |
-| **禁用态** | opacity 50% + 明确非可点 | Medium |
-| **当前位置** | 底部 Tab 高亮当前项(色+图标填充) | Medium |
+| **Touch target** | At least 44px; this project standardizes on **48dp** to satisfy both WCAG 44 and Material 48 | High |
+| **Touch spacing** | At least 8px between adjacent tappable elements | Medium |
+| **Gestures** | Vertical scrolling should win for main content; avoid horizontal swipe for main tabs and do not override system gestures | Medium |
+| **Mobile keyboard** | Use Compose `KeyboardOptions`: `Number` for integer fields and `Decimal` for price thresholds | Medium |
+| **Confirmation dialog** | Deleting watchlist entries or clearing an API key requires confirmation | High |
+| **Color contrast** | Body text must stay at 4.5:1 or higher | High |
+| **Not color only** | Red and green valuation states require icon plus text | High |
+| **Reduced motion** | Respect system animation-scale and accessibility settings; prediction updates must not flash | High |
+| **Loading state** | Use skeletons or a spinner; never freeze the screen with no feedback | High |
+| **Empty state** | Empty watchlist should show guidance plus an `Add` button | Medium |
+| **Real-time validation** | Validate API configuration fields on blur via `onFocusChanged`, not only on submit | Medium |
+| **Disabled state** | Use roughly 50% opacity plus a clear non-interactive affordance | Medium |
+| **Current location** | Highlight the current bottom-tab item with color plus filled icon | Medium |
 
-## 7. 风格与动效(Modern Dark / Cinema Mobile)
+## 7. Style and motion
 
-- Glassmorphism 顶栏/底栏(BlurView intensity ~20);卡片 frosted。
-- Expo.out 缓动 `cubic-bezier(0.16,1,0.3,1)`;弹窗 spring(damping 20 / stiffness 90)。
-- 按压 scale `0.97→1.0` + Haptic(Impact Light/Medium)。
-- 避免纯 `#000000`(OLED 拖影);避免 AI 紫粉渐变滥用。
+- Top and bottom bars should prefer semi-transparent surface styling. On API
+  31+, `RenderEffect` can be used carefully, but lower versions must have a
+  no-blur fallback and text contrast must never be sacrificed.
+- Standard transitions use `CubicBezierEasing(0.16f, 1f, 0.3f, 1f)`. Dialogs
+  use Compose `spring`, and motion parameters should live in motion tokens
+  rather than being scattered inside pages.
+- Press feedback uses a scale from `0.97` to `1.0` plus Android
+  `HapticFeedback`.
+- Avoid pure `#000000` because of OLED smearing, and avoid overusing purple-pink
+  AI gradients.
 
-## 8. Anti-Patterns(禁止)
+## 8. Anti-patterns
 
-- ❌ 红=跌绿=涨的传统股市配色(与本项目语义冲突)
-- ❌ 颜色单独承载信息(必配图标+文字)
-- ❌ Emoji 当图标(用 SVG:Lucide/Heroicons)
-- ❌ 低于 4.5:1 的正文对比
-- ❌ 横滑切主 Tab / 覆盖系统返回手势
-- ❌ 无加载态、无空状态、无删除确认
-- ❌ AI 紫粉渐变滥用、纯黑背景
+- ❌ Traditional stock colors where red means down and green means up
+- ❌ Color carrying meaning without icon and text
+- ❌ Emoji used as functional icons instead of Material Symbols or vector assets
+- ❌ Body text below 4.5:1 contrast
+- ❌ Horizontal swipe for switching main tabs or interactions that override the
+  system back gesture
+- ❌ Missing loading states, missing empty states, or missing delete confirmation
+- ❌ Abusive purple-pink gradients or pure-black backgrounds
 
-## 9. 交付前自检
+## 9. Pre-delivery checklist
 
-- [ ] 所有文本对卡片 ≥4.5:1(数字色已实测)
-- [ ] 红绿估值都带 ↑↓ 图标 + 文字标签
-- [ ] 触控目标 ≥48dp,间距 ≥8px
-- [ ] 数字用 Fira Code 等宽对齐
-- [ ] 删除/清 Key 有二次确认弹窗
-- [ ] 加载=骨架屏,空=引导态,禁用=opacity50
-- [ ] 尊重 prefers-reduced-motion
-- [ ] 底部 Tab 高亮当前页
-- [ ] 图表红绿与估值语义不打架(K线走中性/实空心)
+- [ ] All text on card surfaces is at least 4.5:1 contrast
+- [ ] Red and green valuation states include icon plus text label
+- [ ] Touch targets are at least 48dp with spacing of at least 8dp
+- [ ] Numeric values use monospaced Fira Code alignment
+- [ ] Deleting items or clearing the key requires confirmation
+- [ ] Loading uses skeletons, empty uses guided states, disabled uses reduced opacity
+- [ ] Reduced-motion and animation-scale settings are respected
+- [ ] The current bottom-tab page is clearly highlighted
+- [ ] Chart red/green meaning never conflicts with valuation semantics

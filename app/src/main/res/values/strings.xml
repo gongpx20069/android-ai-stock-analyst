@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">AI Stock Analyst</string>
+    <string name="watchlist">Watchlist</string>
+    <string name="screening">Screening</string>
+    <string name="ai">AI</string>
+    <string name="me">Me</string>
+    <string name="watchlist_title">Valuation watchlist</string>
+    <string name="watchlist_empty_title">No stocks tracked yet</string>
+    <string name="watchlist_empty_body">Add a US stock to monitor valuation room, support and resistance, and model freshness.</string>
+    <string name="add_stock">Add stock</string>
+    <string name="valuation_rule_title">Valuation colors</string>
+    <string name="valuation_upside">Up arrow + green means valuation upside</string>
+    <string name="valuation_risk">Down arrow + red means expensive or chasing risk</string>
+    <string name="screening_title">US stock screening</string>
+    <string name="screening_scope">NASDAQ, NYSE, and NYSE American common stocks plus data-complete ADRs.</string>
+    <string name="screening_exclusions">ETFs, funds, warrants, rights, units, and preferred shares are excluded.</string>
+    <string name="screening_status">Provider and Room integration is the next implementation slice.</string>
+    <string name="ai_title">3+1 AI interpretation</string>
+    <string name="ai_body">Fundamental, technical, and risk agents will run in parallel before an arbiter produces the final research summary.</string>
+    <string name="ai_safety">AI output is research context, not investment advice or a trading instruction.</string>
+    <string name="settings_title">Local settings</string>
+    <string name="settings_azure">Azure OpenAI BYOK</string>
+    <string name="settings_azure_body">Endpoint, key, deployment, and API version will be encrypted and stored on this device.</string>
+    <string name="settings_runtime">Local-only runtime</string>
+    <string name="settings_runtime_body">Quotes, caching, screening, indicators, and ONNX inference stay inside Android.</string>
+</resources>

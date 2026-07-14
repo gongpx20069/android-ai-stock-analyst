@@ -1,68 +1,122 @@
 # CLAUDE.md
 
-Guidance for AI coding agents (Claude Code / Copilot / etc.) working in this repo.
-Keep this file short and **universally applicable**; put task-specific detail in `docs/`
-and reference it here (progressive disclosure). Loaded every session — prune ruthlessly.
+Repository operating guide for coding agents. Keep this file concise and
+universally applicable; put subsystem detail in `docs/` and follow links only
+when the task requires it. `README.md` is the English user-facing entry point,
+and `README.zh-CN.md` is the Chinese user-facing entry point.
 
-## What this is (WHY)
+## 1. Mission and current state
 
-**AI Stock Analyst** — a self-use, free, **BYOK** (user brings own Azure OpenAI key)
-US-stock analysis **Android app**: quotes + basic quant indicators + AI interpretation.
-It encodes the owner's *valuation discipline* (judge by upside room + low forward PE;
-"falling ≠ cheap") instead of generic up/down prediction. Data-driven, **not** a
-buy/sell recommender.
+AI Stock Analyst is a self-use, free, BYOK US-stock research Android app. It
+prioritizes valuation discipline (median target-price upside plus low forward
+P/E) over generic price prediction. It is data-driven and never a buy/sell
+recommender.
 
-## Current state (READ FIRST)
+Implementation is in progress. The repository contains a native
+Kotlin/Compose multi-module project with an application shell, design tokens,
+market-domain models, and deterministic unit tests. The locked product
+architecture remains serverless and local-only: there is no project server,
+and the shipped app must not depend on a Python runtime unless the user
+explicitly reopens that decision.
 
-**Design/documentation stage — there is NO application code yet.** The repo is
-`README.md` + `docs/`. Do not assume Flutter source, tests, or a running backend
-exist. If asked to build, scaffold from scratch per the locked decisions below.
+## 2. Source-of-truth hierarchy
 
-## Repo map (WHAT)
+Resolve conflicts in this order:
 
-Read the relevant doc before touching its subsystem; prefer these pointers over
-restating their content.
+1. `docs/architecture.md` - locked decisions and open questions.
+2. The owning subsystem document listed below.
+3. `docs/design-system/ai-stock-analyst/MASTER.md` - visual and accessibility
+   values.
+4. `README.md` and `README.zh-CN.md` - user-facing summaries, never engineering
+   specifications.
 
-- `docs/architecture.md` — decision log & open questions (**start here**)
-- `docs/data-sources.md` — 2026 quote-API research (Tencent / Sina / yfinance)
-- `docs/analysis.md` — quant/AI methods: valuation & support-resistance, screening, multi-agent, ML
-- `docs/design.md` — product design: pages, user journey, behavioral hedging, charts
-- `docs/design-system/ai-stock-analyst/MASTER.md` — design tokens (color/type/spacing/charts)
+Update the owner document instead of duplicating detailed rules elsewhere.
 
-## Locked decisions (do NOT silently override)
+## 3. Complete repository map and quick routing
 
-- **Tech stack = Flutter / Dart** (reuses mochi-pet packaging; Java/Kotlin/PWA rejected).
-  Charts via `fl_chart`.
-- **Data = 方案③ hybrid**: realtime price from Tencent/Sina domestic APIs (keyless, fast
-  in China); analyst target price / forward PE from a thin **FastAPI + yfinance** backend
-  with daily cache. yfinance is Python-only → cannot run on-device, hence the backend.
-- **AI = BYOK Azure OpenAI** (Endpoint / Key / Deployment / API-Version — *not* a clean
-  OpenAI drop-in). Keys stay on-device.
-- **AI architecture = trimmed 3+1 multi-agent** (fundamental / technical / risk + arbiter),
-  modeled on TradingAgents.
-- **ML = LightGBM** (not XGBoost); direction probability is an *auxiliary* signal only.
+| File | Owner / when to read |
+|---|---|
+| [`README.md`](README.md) | English user entry point; product value, status, and docs navigation |
+| [`README.zh-CN.md`](README.zh-CN.md) | Chinese user entry point; product overview and docs navigation |
+| [`CLAUDE.md`](CLAUDE.md) | Agent harness entry point; routing, guardrails, workflow, and validation |
+| [`.gitignore`](.gitignore) | Android build output, local tooling artifacts, local config, keystores, and BYOK secret exclusions |
+| [`docs/architecture.md`](docs/architecture.md) | **Start here** for stack, boundaries, decisions, and delivery order |
+| [`docs/data-sources.md`](docs/data-sources.md) | Direct Android provider clients, endpoint quirks, freshness, and fallback |
+| [`docs/analysis.md`](docs/analysis.md) | Formulas, screening, 3+1 interpretation flow, and local LightGBM inference |
+| [`docs/design.md`](docs/design.md) | Screens, UX flows, TradingView-inspired chart interactions, and state design |
+| [`docs/design-system/ai-stock-analyst/MASTER.md`](docs/design-system/ai-stock-analyst/MASTER.md) | Exact visual tokens, accessibility rules, and chart semantics |
+| [`docs/ai-prompt.md`](docs/ai-prompt.md) | Azure OpenAI prompt contract, agent roles, safety rules, and JSON output |
+| [`settings.gradle.kts`](settings.gradle.kts) and [`gradle/libs.versions.toml`](gradle/libs.versions.toml) | Module graph, repositories, plugins, and dependency versions |
+| [`app/`](app/) | Android application, four-tab Compose shell, resources, and Hilt dependency graph |
+| [`core/data/`](core/data/) | Local-first market repository, refresh results, and stale-cache behavior |
+| [`core/database/`](core/database/) | Room entities, DAOs, schema, and market-model mappings |
+| [`core/model/`](core/model/) | Canonical symbols, exchanges, quotes, bars, valuation snapshots, and predictions |
+| [`core/domain/`](core/domain/) | Deterministic calculations and exchange/device-time conversion |
+| [`core/designsystem/`](core/designsystem/) | Compose theme, design tokens, typography, and semantic colors |
+| [`core/network/`](core/network/) | Tencent/Sina quote clients, Yahoo valuation client, parsing, and provider fallback |
 
-## Non-obvious rules & gotchas (YOU MUST follow)
+Routing shortcuts:
 
-- **Reversed color semantics**: 🔴 red = *expensive / chasing-high* (NOT "price down");
-  🟢 green = *has upside room* (NOT "price up"). Deliberate behavioral hedge against the
-  owner's buy-the-dip instinct. Color must **never** carry meaning alone — always pair
-  with ↑↓ icon + text label (accessibility). Details in `docs/design.md`.
-- **Use the median (not mean) analyst target price**; upside% = median target ÷ current − 1.
-- **Never commit secrets**: BYOK keys, `.env`, `*.key`, `local.properties` are gitignored —
-  keep it that way.
-- Quote-API quirks (see `docs/data-sources.md`): Tencent `qt.gtimg.cn/q=usNVDA`
-  (`us` prefix, **no** `.OQ` suffix); Sina `hq.sinajs.cn/list=gb_aapl` (`gb_` prefix +
-  lowercase, needs `Referer: finance.sina.com.cn`, GBK→UTF-8).
+- Stack, modules, dependencies, or roadmap -> `docs/architecture.md`
+- HTTP fields, direct-provider contracts, exchange-time normalization, freshness, and fallback -> `docs/data-sources.md`
+- Indicator math, screening, or local ML contract -> `docs/analysis.md`
+- Page behavior or chart gestures -> `docs/design.md`
+- Exact color, type, spacing, or chart semantics -> `MASTER.md`
+- LLM inputs, outputs, or disclaimer text -> `docs/ai-prompt.md`
 
-## How to work here (HOW)
+## 4. Agent guardrails
 
-- Branch `main` (auto-deploy). Commits = **Conventional Commits with Chinese descriptions**,
-  e.g. `docs(ux): 定稿反直觉配色语义`.
-- Read a file before editing it; make focused patches; keep `docs/` orderly and cross-linked.
-  When adding/removing/renaming a `docs/` file, update **all three** indexes in sync:
-  `README.md`, this file's Repo map, and `docs/architecture.md` §4.
-- **Verify, don't assert**: docs stage has no test suite — verify by re-reading changed
-  files and checking cross-doc links. Once Flutter is scaffolded the check becomes
-  `flutter analyze && flutter test`; a Python backend adds `pytest`. Show the command +
-  output as evidence.
+- Do not override locked decisions in
+  [`docs/architecture.md`](docs/architecture.md).
+- Do not introduce a project server, any other server-side service, or Python runtime into
+  the shipped product unless the user explicitly reopens that decision in
+  [`docs/architecture.md`](docs/architecture.md).
+- Median target-price logic and reversed valuation colors are defined in
+  [`docs/analysis.md` §1.1](docs/analysis.md#11-valuation-as-the-discipline-backbone)
+  and
+  [MASTER §2](docs/design-system/ai-stock-analyst/MASTER.md#2-semantic-layer-reversed-valuation-colors-the-projects-core).
+- ML stays auxiliary: never fabricate future candles, deterministic price
+  paths, or stronger claims than the model contract allows. See
+  [`docs/analysis.md` §4.3](docs/analysis.md#43-live-inference-and-visualization-contract)
+  and
+  [MASTER §5](docs/design-system/ai-stock-analyst/MASTER.md#5-chart-color-rules-for-vico-plus-compose-overlays).
+- Never activate an imported ONNX model without signature, checksum,
+  feature-schema, horizon, and runtime-compatibility validation plus rollback.
+- Never commit or expose API keys, `.env`, `local.properties`, keystores,
+  signing properties, generated APK/AAB files, caches, or unapproved training
+  artifacts. Versioned ONNX models intentionally shipped with the APK are
+  source assets and must remain committed.
+- Every Markdown file must stay English-only except `README.zh-CN.md`.
+- When adding, removing, or renaming a document, update `README.md`,
+  `README.zh-CN.md`, this repository map, and `docs/architecture.md` in the
+  same change.
+
+## 5. Harness workflow
+
+1. Read `docs/architecture.md`, then only the owning documents for the task.
+2. Search before adding helpers, rules, files, or dependencies.
+3. Make focused changes and preserve unrelated work in a dirty worktree.
+4. Keep one source of truth; add cross-links rather than copied specifications.
+5. Record newly locked or reopened decisions in `docs/architecture.md`.
+6. Validate the smallest relevant surface and report failures plainly.
+
+## 6. Validation and completion
+
+Documentation stage:
+
+- Re-read changed sections.
+- Verify every relative Markdown link resolves.
+- Search for superseded stack references and invalid links to missing files.
+
+```powershell
+.\gradlew.bat lint test
+```
+
+A change is complete only when implementation, directly related docs, secret
+handling, and the relevant validation agree.
+
+## 7. Git conventions
+
+- Default branch: `main`.
+- Commits: Conventional Commits with Chinese-language descriptions.
+- Do not amend, force-push, or discard user changes unless explicitly asked.

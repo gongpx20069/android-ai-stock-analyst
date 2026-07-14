@@ -1,358 +1,414 @@
-# 分析与 AI 方法
+# Analysis and AI Methods
 
-> 本文汇总本 App 的**分析与 AI 能力**:确定性量化指标(估值 / 支撑压力 / 技术面)、选股流水线、多智能体 AI 解读、ML 辅助信号。
-> 分工:硬指标(§1–§2)是**事实**(公式固定、可解释),AI(§3)负责**解读**,ML(§4)只给**概率**参考。你的估值纪律永远靠硬指标,AI/ML 是配菜。
-> 数据来源统一见 [`data-sources.md`](data-sources.md)(方案③:实时价→腾讯/新浪,基本面/分析师→yfinance 薄后端每日缓存),本文不再重复论证。
+> This document owns the app's **deterministic analysis logic**, **screening
+> rules**, the selected **3+1 AI interpretation flow**, and the **LightGBM
+> prediction contract**. Hard indicators in §1-§2 are facts with stable
+> formulas. AI in §3 interprets those facts. ML in §4 provides probability
+> references only. For provider contracts and freshness, see
+> [`data-sources.md`](data-sources.md). For prompt schemas and the canonical AI
+> disclaimer, see [`ai-prompt.md`](ai-prompt.md).
 
 ---
 
-## 1. 估值指标、支撑压力与技术面
+<a id="1-valuation-metrics-support-and-resistance-and-technicals"></a>
+## 1. Valuation metrics, support and resistance, and technicals
 
-> 管**确定性、公式固定、可解释**的量化指标。三类都是 MVP 必做:
+| Category | Indicators | Discipline purpose | Data source |
+|---|---|---|---|
+| **Valuation** | Current price, **median target price**, upside percent, forward P/E, rating, analyst count | Primary axis: upside plus low forward P/E | Fundamental snapshot |
+| **Support and resistance** | Pivot points, swing highs/lows, Fibonacci, moving averages, 52-week highs/lows | Show room above and likely support below | Price history |
+| **Technicals** | MA50/200, RSI, MACD, ATR, Bollinger Bands | Secondary context for overheating, trend, and volatility | Price history |
 
-| 类 | 指标 | 纪律用途 | 数据来源 |
-|----|------|---------|---------|
-| **估值面** ⭐核心 | 现价、**中位目标价**、上行空间%、前瞻PE、评级、分析师数 | 主轴:看上行空间+低PE | yfinance 后端 |
-| **支撑压力** ⭐必做 | 枢轴点、波段高低、斐波那契、均线、52周高低 | 看"上方还有多少空间、下方跌到哪有撑" | 价格历史(国内源/yfinance) |
-| **技术面** 辅助 | MA50/200、RSI、MACD、ATR、布林带 | 辅助判断过热/超卖 | 价格历史 |
+### 1.1 Valuation as the discipline backbone
 
-### 1.1 估值面(纪律主轴)
+| Metric | Formula | Field |
+|---|---|---|
+| Upside percent | `(median target price / current price - 1) * 100%` | `targetMedianPrice / currentPrice` |
+| Forward P/E | Direct field | `forwardPE` |
+| Rating | Normalized bucket or recommendation label | `recommendationKey` and related bucket counts |
+| Analyst count | Total analysts covering the stock | `numberOfAnalystOpinions` |
 
-| 指标 | 公式 | 字段 |
-|------|------|------|
-| 上行空间% | (中位目标价 ÷ 现价 − 1) × 100% | targetMedianPrice / currentPrice |
-| 前瞻PE | 直接取 | forwardPE |
-| 评级 | strongBuy/buy/hold/sell 家数 | recommendationKey + 各档家数 |
-| 分析师数 | 覆盖该股的分析师总数 | numberOfAnalystOpinions |
+> Use the **median** target price, not the mean. Median reduces the influence
+> of outliers and preserves the product's valuation discipline.
 
-> ⚠️ 用**中位目标价(median)不用均值(mean)**:剔除极端乐观/悲观分析师,更稳——这是监控任务里已验证的做法。
+<a id="12-support-and-resistance-levels-four-required-methods"></a>
+### 1.2 Support and resistance levels: four required methods
 
-### 1.2 支撑压力位(⭐必做,4 种算法)
+Support and resistance are not predictions. They are reusable reference levels
+derived from price history. The product requires **four methods**, and any
+level confirmed by at least two methods is treated as a stronger signal.
 
-> **核心理念**:支撑压力不是预测,是"市场记忆"——价格在哪些位置反复转向,那里就是支撑/压力。**4 种方法交叉验证,多个方法都指向的位置最可靠。**
+#### 1. Classic pivot points for short-term and intraday use
 
-#### ① 经典枢轴点(Pivot Points)—— 短线/日内
-用**上一根日K的最高H、最低L、收盘C**算今天的支撑压力:
+Use the previous daily candle's high `H`, low `L`, and close `C`:
+
+```text
+PP (pivot) = (H + L + C) / 3
+R1 = 2 * PP - L      S1 = 2 * PP - H
+R2 = PP + (H - L)    S2 = PP - (H - L)
+R3 = H + 2*(PP - L)  S3 = L - 2*(PP - H)
 ```
-PP(轴心)= (H + L + C) / 3
-R1 = 2·PP − L      S1 = 2·PP − H
-R2 = PP + (H − L)   S2 = PP − (H − L)
-R3 = H + 2·(PP − L) S3 = L − 2·(PP − H)
+
+- Best for short-term and intraday reference.
+
+#### 2. Swing highs and lows for medium-term structure
+
+Find local extrema across a rolling window:
+
+```text
+local maxima = highs that equal the rolling-window maximum
+local minima = lows that equal the rolling-window minimum
 ```
-- **适合**:短线、日内参考。
-- **NVDA 实测**(现价198.45):PP=197.5,压力 R1=200 / R2=201.5,支撑 S1=196 / S2=193.6。
 
-#### ② 波段高低点(Swing High/Low)⭐中线最直观
-找近 6 个月的**局部高点(峰)和局部低点(谷)**——价格反复触碰反弹的地方:
-```python
-# 局部极值:某点是其前后各 N 根K线里的最高/最低(N=5)
-def local_max(highs, w=5):
-    return [i for i in range(w, len(highs)-w) if highs[i]==max(highs[i-w:i+w+1])]
-# 取 > 现价的最近几个高点 = 上方压力;< 现价的最近几个低点 = 下方支撑
+- Best for medium-term watchlist review and range awareness.
+- Nearest highs above current price become resistance; nearest lows below it
+  become support.
+
+#### 3. Fibonacci retracement for pullback zones
+
+Use the chosen swing high and low:
+
+```text
+Level = High - ratio * (High - Low)
 ```
-- **适合**:中线持仓(贴合你的风格)。
-- **NVDA 实测**:上方压力 **216.6 / 232 / 236.3**,下方支撑 **194.5 / 179 / 177.4**。
-- 解读:现价 198,最近压力 216(+9%),最近支撑 194.5(−2%)——离支撑很近、上方有空间。
 
-#### ③ 斐波那契回撤(Fibonacci)—— 找回调买点
-取近 6 个月**最高→最低**,画 23.6% / 38.2% / 50% / 61.8% 四条回撤线:
+- Track at least 23.6%, 38.2%, 50%, and 61.8%.
+
+#### 4. Moving averages plus 52-week highs and lows for dynamic levels
+
+- **MA50 / MA200:** dynamic support or resistance that moves with trend.
+- **52-week high / 52-week low:** annual ceiling and floor; proximity to the
+  high feeds anti-chasing warnings.
+
+#### Combined presentation on the detail page
+
+```text
+Resistance: nearest levels above current price, labeled by method and distance
+Current price: centered reference marker
+Support: nearest levels below current price, labeled by method and distance
+Median target: separate valuation reference, not a support/resistance level
 ```
-某档位 = 最高 − 比例 × (最高 − 最低)
-```
-- **适合**:判断"回调到哪一档可能止跌"。38.2% 和 61.8% 是最受关注的支撑档。
 
-#### ④ 均线 + 52周高低 —— 动态支撑/压力
-- **MA50 / MA200**:价格常在均线附近获得支撑或受阻(动态,会随时间移动)。
-- **52周高 / 52周低**:年度天花板和地板,贴近52周高=追高预警🔴。
+The main UI summary is a pair of numeric cards:
+`distance to nearest support` and `distance to nearest resistance`.
 
-#### 综合呈现(详情页)
-```
-            压力 ②216(+9%) ④MA200 ③Fib61.8%
-现价 198.45 ─────●──────────────────────────
-            支撑 ②194.5(−2%) ①S1 196 ④MA50
-分析师中位目标价 XXX(上行空间 +Y%)
-```
-> **多方法共振原则**:若波段高点、斐波那契、整数关口都指向 ~215,则 215 是强压力。App 把"被 ≥2 种方法命中"的位置**加粗高亮**标可靠度。呈现上用醒目数字卡"距最近支撑 −X% / 距最近压力 +Y%",与上行空间%、前瞻PE 并列。
+<a id="13-technicals-as-a-supporting-role"></a>
+### 1.3 Technicals as a supporting role
 
-### 1.3 技术面(辅助)
+| Indicator | Meaning | Reference line |
+|---|---|---|
+| MA50 / MA200 | Medium and long-term trend | Golden cross / death cross |
+| RSI(14) | Overbought or oversold | `>70` overbought / `<30` oversold |
+| MACD | Momentum | Histogram crossing from negative to positive suggests momentum improvement |
+| ATR | Volatility range | Useful for distance and risk framing |
+| Bollinger Bands | Price channel | Upper band = richer, lower band = cheaper |
 
-| 指标 | 含义 | 参考线 |
-|------|------|--------|
-| MA50/MA200 | 中长期趋势 | 金叉(50上穿200)/死叉 |
-| RSI(14) | 超买超卖 | >70超买🔴 / <30超卖🟢 |
-| MACD | 动量 | 柱状由负转正=动能转强 |
-| ATR | 波动幅度 | 用于估算止损距离 |
-| 布林带 | 价格通道 | 触上轨=偏贵,触下轨=偏便宜 |
+> The MVP includes only **MA50/200, RSI(14), and 52-week positioning**.
+> MACD, Bollinger Bands, and ATR are phase-two additions.
 
-> **MVP 只做 MA50/200 + RSI(14) + 52周位置;MACD/布林/ATR 放二期。** 技术面**明确是配角**,防止你被短期价格带偏,主角永远是估值面(§1.1)。
+### 1.4 Calculation pipeline and inputs for AI and ML
 
-### 1.4 计算落点与喂给 AI / ML
-
-```
-[Ubuntu 后端]
-  ├─ 估值面:yfinance 字段(每日缓存)
-  ├─ 支撑压力:price 历史 → 4种算法计算 → 输出位置列表
-  ├─ 技术面:price 历史 → ta 计算 MA/RSI/MACD
-  └─ GET /indicators/{symbol} → 返回 JSON {估值, 支撑压力, 技术}
+```text
+[Android provider clients]
+  ├─ Tencent / Sina -> quotes and OHLCV
+  └─ Yahoo Finance -> valuation and analyst snapshot
         ▼
-[Flutter App] 取 JSON → 详情页数字卡 + 支撑压力区间点图高亮
+[Room repositories]
+        ▼
+[Local Kotlin use cases]
+  ├─ Valuation snapshot
+  ├─ Support/resistance: price history -> 4 methods -> level set
+  ├─ Technicals: price history -> deterministic calculations
+  └─ Shared analysis snapshot for UI, screening, AI, and ML
 ```
-- 支撑压力/技术面**纯计算,毫秒级**,不需要训练(区别于 ML §4)。
-- 依赖库(后端):`numpy`(波段/枢轴)、可选 `pandas-ta` 或 `ta`(RSI/MACD/布林)。
-  - ⚠️ 当前 nanobotenv **未装** scipy/pandas-ta;§1.2 的波段算法已用**纯 numpy 手写**验证可跑(不依赖 scipy),后端轻量。
-- **喂 AI agent**(§3.3):基本面 agent 吃"上行空间%/前瞻PE/评级",技术面 agent 吃"支撑压力位/RSI/均线"(如"现价离支撑2%、离压力9%,风险收益比不错")。
-- **喂 ML 模型**(§4):把"距支撑%/距压力%/RSI/上行空间%"做成**特征**,让模型用你认可的逻辑学习。
+
+- Support/resistance and technical indicators are pure calculations.
+- They are calculated locally in Kotlin; there is no project-server endpoint for
+  indicator calculation.
+- AI inputs from §3 include upside percent, forward P/E, rating, analyst count,
+  support/resistance distances, RSI, moving averages, and freshness warnings.
+- ML features from §4 should include valuation and level-distance signals so the
+  model learns from the same discipline used in the UI.
 
 ---
 
-## 2. 选股流水线与估值打分
+## 2. Stock-selection pipeline and valuation scoring
 
-> **把"我现成的选股流水线 + 我的估值纪律"编码进 App,而不是让 AI 瞎推荐。** 原则:①数据驱动、非荐股(输出"按规则筛出的候选 + 客观数据",不预测涨跌);②复用现成 `us-stock-screening` skill(nasdaq universe → 过滤 → yfinance 基本面 → 分析);③排序/打分以**上行空间% + 前瞻PE**为主轴(在跌≠便宜);④AI 只做最后一层解读,不参与"选谁",避免幻觉选股。
+The product ranks candidates by deterministic rules first and uses AI only for
+interpretation after ranking. A price drop alone never qualifies as value.
 
-### 2.1 选股流水线(四步漏斗)
+<a id="21-stock-selection-pipeline-four-stage-funnel"></a>
+### 2.1 Stock-selection pipeline: four-stage funnel
 
+```text
+[Configured universe] -> [Hard filters] -> [Valuation scoring and ranking] -> [AI review of Top N]
 ```
-[全市场 universe]  →  [硬性过滤]  →  [估值打分排序]  →  [AI 解读 Top N]
-   ~5000+只            ~几百只           Top 20-50          Top 5-10
-   nasdaq-public      规则筛(秒级)     按你的纪律打分     喂给你的Azure key
-```
 
-**第1步:Universe(候选池)**
-- 来源:`nasdaq-public` 的 screener,拉全 Nasdaq/NYSE 代码表(分页取全)。免 key、免后端;数据量大但只是代码+基础字段,很轻。
+**Step 1: universe**
 
-**第2步:硬性过滤(快、纯规则,先砍掉一大半)**
-沿用 `us-stock-screening` 默认门槛,可在 App 里调:
-- 市值 ≥ $10B(默认,过滤小盘/老千)
-- 现价 ≥ $5(过滤仙股)
-- 日均成交量 ≥ 500K(保证流动性)
-- 有明确行业/板块(去掉空白)
-- (可选)行业白名单/黑名单 —— 比如只看科技、剔除生物医药等高波动
+- Load the NASDAQ, NYSE, and NYSE American universe from
+  [`data-sources.md` §2.4](data-sources.md#24-us-exchange-screening-universe).
+- Keep common stocks and data-complete ADRs; exclude ETFs, funds, warrants,
+  rights, units, and preferred shares before valuation scoring.
 
-**第3步:估值打分排序 ⭐(你的纪律就编码在这)**
-对过滤后的票,用 yfinance 拉关键字段,按**你的框架**算分:
+**Step 2: hard filters**
 
-| 维度 | 字段 | 规则 | 权重(建议) |
-|------|------|------|-----------|
-| **上行空间%** | `targetMedianPrice` ÷ `currentPrice` − 1 | 越大越好;<0 直接淘汰 | 40% |
-| **前瞻PE** | `forwardPE` | 越低越好;为负/极高降权 | 30% |
-| **分析师置信** | `numberOfAnalystOpinions` | <5 家降权(置信不足) | 10% |
-| **评级** | `recommendationKey` | buy/strong_buy 加分,sell 淘汰 | 10% |
-| **位置(防追高)** | 现价 vs 52周高 / 200日均线 | 离52周高太近(如>95%)降权 | 10% |
+- Market cap >= $10B
+- Current price >= $5
+- Average daily volume >= 500K
+- Non-empty sector or industry
+- Optional sector whitelist or blacklist
 
-> 关键:**排序主轴是"上行空间% + 低前瞻PE",不是"涨得多"。** 这正是"避免买在山顶"的核心,把它写成代码而非凭感觉。输出:一张按总分排序的候选表(代码/名称/现价/中位目标价/上行空间%/前瞻PE/评级/分析师数)。
+**Step 3: valuation scoring and ranking**
 
-**第4步:AI 解读 Top N(用你的 Azure key)**
-- 只把排名靠前的 5–10 只,连同结构化数据,喂给你自己的 Azure OpenAI。
-- AI 的任务是**解读 + 风险提示**(为什么便宜?上行空间是否可信?有何风险?),**不是重新选股**。
-- Prompt 内嵌你的纪律(见 `ai-prompt.md`,待写):看上行空间+低PE、在跌≠便宜、三大卖出信号。
+| Dimension | Field | Rule | Suggested weight |
+|---|---|---|---|
+| **Upside percent** | `targetMedianPrice / currentPrice - 1` | Higher is better; remove values below 0 | 40% |
+| **Forward P/E** | `forwardPE` | Lower is better; penalize negative or extreme values | 30% |
+| **Analyst confidence** | `numberOfAnalystOpinions` | Penalize coverage below 5 analysts | 10% |
+| **Rating** | `recommendationKey` | Reward `buy` or `strong_buy`; remove `sell` | 10% |
+| **Positioning / anti-chasing** | Current price vs 52-week high or 200-day average | Penalize names too close to the 52-week high, such as above 95% | 10% |
 
-### 2.2 两种"选股入口"(App 里的功能形态)
+The ranked output should include symbol, name, current price, median target
+price, upside percent, forward P/E, rating, and analyst count.
 
-| 入口 | 场景 | 实现 |
-|------|------|------|
-| **A. 自选监控**(高频用) | 看我已持仓/关注的票(GOOGL/AMZN/NVDA…) | 直接对固定列表跑第3-4步,**等于把每日 WeChat 监控搬进 App** |
-| **B. 全市场筛选**(低频用) | "帮我从全市场挑几只低估的" | 完整跑第1-4步漏斗 |
+**Step 4: AI interpretation of the Top N**
 
-> 建议 MVP **先做 A(自选监控)**:复用度最高、数据量小、最快出成果;B(全市场筛选)二期再上。
+- Send only the top 5-10 names and their structured facts to the user's Azure
+  OpenAI configuration.
+- AI explains valuation credibility, technical context, and risk. It does not
+  re-rank the universe.
+- Prompt schemas and output validation live only in
+  [`ai-prompt.md`](ai-prompt.md).
 
-### 2.3 性能与额度现实(重要)
+<a id="22-two-stock-selection-entry-points-as-product-behavior"></a>
+### 2.2 Two stock-selection entry points as product behavior
 
-全市场筛选最大的坑是**第3步要对几百只逐个调 yfinance**,慢且易触发限流。对策:
+| Entry point | Scenario | Implementation |
+|---|---|---|
+| **A. Watchlist monitoring** | Reviewing tracked names already saved by the user | Run the ranking and interpretation steps on a fixed list |
+| **B. Three-exchange screening** | Finding new candidates across NASDAQ, NYSE, and NYSE American operating companies | Run the full funnel locally in the MVP |
 
-1. **两段式**:硬过滤(第2步)在端上/后端用轻字段快速砍到几百只;只对**幸存者**调 yfinance 重字段。
-2. **后端缓存 + 批量**:基本面/分析师数据变化慢,**后端每天批量拉一次全市场缓存**,App 查的是缓存 → 秒回、零限流。这与 [`data-sources.md`](data-sources.md) 方案③的"后端每日缓存"天然契合。
-3. **分页/懒加载**:候选表先出 Top 20,滑动再加载。
+Both entry points are part of the MVP. Watchlist monitoring remains the user's
+daily cockpit, while Screening is a fully working discovery surface.
 
-> 选股打分字段(目标价/前瞻PE)**只能来自后端 yfinance 缓存** → 必须走 [`data-sources.md`](data-sources.md) 方案①或③(方案②纯 Finnhub 做不了);实时价可走腾讯/新浪。
+### 2.3 Performance and quota reality
+
+Three-exchange screening becomes expensive when large survivor lists require
+heavier fundamental lookups. The mitigation plan is:
+
+1. Use a staged funnel so light filters eliminate most names before the
+   expensive fields are needed.
+2. Cache slower-moving fundamentals and analyst fields locally in Room on a
+   daily cadence.
+3. Run refreshes in WorkManager batches with resumable stage markers and page
+   cursors.
+4. Page results so the UI can show ranked names quickly without waiting for the
+   full universe.
+
+Target price and forward P/E must come from the selected fundamental snapshot.
+The screening engine should query normalized cached data, not live source
+responses, for ranked results.
 
 ---
 
-## 3. GitHub 对标与多智能体方案
+<a id="3-multi-agent-ai-interpretation"></a>
+## 3. Multi-agent AI interpretation
 
-> 看清"AI 金融 + 机器学习量化"这件事,**GitHub 上大家到底怎么做的**,哪些值得抄、哪些是坑,最后收敛出**最适合本 App 的方案**。方法:2026-06-30 用 GitHub API 拉了各项目真实 star/更新时间,并读了头部项目 README 架构。
+AI is used for **structured interpretation**, not for replacing formulas,
+screening, or the data contract. The selected design keeps token cost low,
+keeps agent roles legible, and aligns with the canonical schemas in
+[`ai-prompt.md`](ai-prompt.md).
 
-### 3.1 对标调研(按真实 star,2026-06 实拉)
+<a id="31-streamlined-3-plus-1-flow"></a>
+### 3.1 Streamlined 3 plus 1 flow
 
-**A. 旗舰量化框架(重武器)**
-| 项目 | ⭐ | 语言 | 是什么 | 对我们的价值 |
-|------|----|----|--------|------------|
-| **TauricResearch/TradingAgents** | **90000** | Python | 多智能体 LLM 交易框架(学术论文级,业界标杆) | ⭐ **架构范本** |
-| **microsoft/qlib** | 45444 | Python | 微软 AI 量化平台(因子/模型/回测全家桶) | 太重,仅借鉴回测思路 |
-| **FinGPT** | 20754 | Python | 开源金融大模型 | 偏研究,暂不用 |
-| **stefan-jansen/ML-for-trading** | 19452 | Notebook | 《机器学习量化交易》全书代码 | ⭐ ML 特征工程教科书 |
-| **FinRL** | 15559 | Notebook | 金融强化学习 | 强化学习太难落地,跳过 |
-| **OpenBB** | 69878 | Python | 金融数据/分析平台(给分析师和AI agent用) | 数据层可参考 |
-
-**B. LLM 多智能体投研(2026 最热方向)**
-| 项目 | ⭐ | 亮点 | 对我们的价值 |
-|------|----|------|------------|
-| **TradingAgents-AShare** | 629 | TradingAgents 的**A股本地化+Web UI**:自选股、定时分析、持仓追踪、BYOK多厂商 | ⭐⭐ **几乎就是我们想做的形态** |
-| **FinMem-LLM-StockTrading** | 916 | 带分层记忆的 LLM 交易 agent | 记忆机制可借鉴 |
-| **renee-jia/trading-bot** | 105 | 多因子打分 + 宏观多agent | 打分思路参考 |
-| **1517005260/stock-agent** | 100 | 基于 LLM 的股票投资助手 | 轻量参考 |
-
-**C. ML/深度学习预测模型库**
-| 项目 | ⭐ | 内容 | 现实评价 |
-|------|----|------|---------|
-| **huseinzol05/Stock-Prediction-Models** | 9408 | **30个深度模型(LSTM/GRU/Transformer)+23个RL agent+蒙特卡洛** | ⭐ 模型大全,但全是研究notebook |
-| robertmartin8/MachineLearningStocks | 1953 | scikit-learn 基本面选股预测 | ⭐ 轻量可抄 |
-| scorpionhiccup/StockPricePrediction | 1533 | ML 价格预测 | 教学向 |
-
-### 3.2 两条技术路线与三个硬结论
-
-**🔵 路线一:LLM 多智能体(2026 主流、最火)**
-**代表:TradingAgents(90k⭐)。** 核心打法 = **把投研机构的分工搬给一群 LLM agent**:
-
-```
-分析师团队(并行)         研究员辩论          决策层
-├─ 基本面分析师    ┐
-├─ 技术面分析师    ├──→  多头 vs 空头  ──→  交易员 ──→ 风控三方 ──→ 组合经理
-├─ 新闻分析师      │      (结构化辩论)                  (激进/稳健/中性)
-└─ 情绪分析师      ┘
-```
-- **AShare 版**做成了产品:Web UI + 自选股 + 定时分析 + 持仓追踪 + **BYOK 多厂商** + REST API,**几乎就是你想要的形态**(只是它是 Web+A股,你要 Android+美股)。
-- ✅ 可解释(每 agent 给理由)、贴合"基本面+估值"、天然适配 BYOK Azure key。⚠️ 成本:一次分析调十几个 agent,**token 花得多**(你的 key 自担)。
-
-**🟢 路线二:传统 ML 预测(LSTM/XGBoost/RL)**
-**代表:huseinzol05(9.4k⭐)收集 30+ 深度模型。** 最重要的诚实发现:这些**几乎全是研究型 notebook,回测好看、实盘极少有人敢用**;业界共识是**深度学习(LSTM)在单股日线上不比简单模型强多少,还难调难懂**;连 90k 星的 TradingAgents 都写明"仅研究用途,非投资建议"。
-
-**对标后的三个硬结论:**
-1. **不要重造轮子**:qlib/FinRL/FinGPT 是重武器,不适合手机自用 App。**抄架构思想,别搬代码**。
-2. **LLM 多智能体 > 纯ML预测**(对"按估值纪律解读个股、非高频交易"的场景):agent 可解释、贴基本面、天然吃 BYOK Azure key;纯 ML 价格预测实盘不可靠,只能当辅助小信号。
-3. **TradingAgents-AShare 是最好参照物**:已验证"BYOK 多智能体 + 自选股 + 定时分析 + 持仓追踪"形态可行——**你要做的约等于"它的 Android 美股版,且更轻"**。
-
-### 3.3 ⭐ 精简多智能体 3+1 方案
-
-TradingAgents 的 15+ agent 对自用太重太烧 token。**砍成 3 个核心 agent + 1 个裁决**:
-
-```
-[你的Azure key 驱动]
-┌─────────────────────────────────────────────┐
-│  ① 基本面/估值 Agent ── 吃 yfinance 数据 +    │
-│     你的纪律(上行空间%/前瞻PE/评级)         │
-│  ② 技术面 Agent ──── 吃 MA/RSI/52周位置       │
-│  ③ 风险/反方 Agent ── 专门唱反调,防止过度乐观 │
-│         ↓ 三方意见                            │
-│  ④ 裁决 Agent ─── 综合给:方向/置信度/        │
-│     目标价区间/核心风险/一句话结论             │
-└─────────────────────────────────────────────┘
-```
-- 3+1 已覆盖"基本面+技术+风险+裁决",一次分析约 4-6 次 LLM 调用(而非十几次),token 可控且每 agent 输出理由可解释。
-- ① 号 agent 的 prompt 直接写死你的纪律(上行空间+低PE、在跌≠便宜、三大卖出信号,见 `ai-prompt.md`);输出**结构化决策卡**(方向/置信/目标价/风险),非散文。
-- **ML 层的位置**:只做 T2 LightGBM 涨跌方向概率(§4),**不做 LSTM/RL**;ML 结果**只作为 ③风险agent 和 ④裁决agent 的一个输入特征**("模型给的5天上涨概率 0.58"),**不单独下结论**。这样 ML 既参与了,又被关在"辅助信号"的笼子里。
-- **数据层 & 可视化层**:数据层走 [`data-sources.md`](data-sources.md) 方案③,AI/ML 都从这层取数;可视化(AI 决策卡 + ML 概率/回测图)见 [`design.md` §6](design.md#6-图表设计可视化清单)。
-
-### 3.4 架构全景与借鉴清单
-
-```
-┌────────────── Flutter Android App ──────────────┐
-│  自选监控页 │ 个股详情页 │ 筛选页 │ AI解读页      │
-│   (估值图)   (K线+决策卡) (排序)  (多agent报告)   │
-└───────┬──────────────────────────────┬──────────┘
-        │ 实时价(直连)                  │ 分析请求
-        ▼                              ▼
-   腾讯/新浪API              ┌─── 你的 Ubuntu 薄后端 ───┐
-   (国内快/免key)            │ FastAPI                  │
-                            │ ├ yfinance 缓存(基本面)   │
-                            │ ├ LightGBM(涨跌概率)      │
-                            │ └ 多智能体编排            │
-                            │     ↑ 调你的 Azure key    │
-                            └──────────────────────────┘
+```text
+1. Fundamental / valuation agent
+2. Technical agent
+3. Risk / counter-argument agent
+        ↓ three parallel viewpoints
+4. Arbiter agent
 ```
 
-**借鉴清单(谁的什么,拿来用):**
-| 来源项目 | 借鉴什么 | 怎么用 |
-|---------|---------|--------|
-| TradingAgents | 多智能体分工 + 辩论架构 | 砍成 3+1 精简版 |
-| TradingAgents-AShare | 产品形态:自选股/定时/持仓/BYOK/决策卡 | 直接对标,做 Android 美股版 |
-| FinMem | 分层记忆 | 二期给 agent 加"历史判断记忆" |
-| robertmartin8 | scikit-learn 克制的选股预测 | ML 层照此轻量化 |
-| stefan-jansen | ML 特征工程方法 | LightGBM 特征设计参考 |
-| huseinzol05 | LSTM/RL 长啥样 | **当反面教材**:知道但不用 |
+| Agent | Required focus |
+|---|---|
+| Fundamental / valuation | Upside, forward P/E, analyst coverage, rating strength, and valuation-state interpretation |
+| Technical | Support/resistance distances, MA context, RSI, 52-week position, and anti-chasing signals |
+| Risk / counter-argument | Data freshness, overheating, conflicting evidence, model weakness, and reasons not to over-trust the setup |
+| Arbiter | Agreements, conflicts, confidence, valuation state, key evidence, risk flags, watch conditions, and freshness warnings |
+
+- The first three agents may run in parallel.
+- The arbiter consumes only the shared input snapshot plus the three structured
+  agent outputs.
+- Output schemas, validation, and the canonical disclaimer belong only to
+  [`ai-prompt.md`](ai-prompt.md).
+- LightGBM outputs from §4 may inform the risk agent and arbiter, but ML never
+  becomes a standalone recommendation engine.
 
 ---
 
-## 4. ML 辅助信号(LightGBM 涨跌方向)
+<a id="4-ml-support-signals-lightgbm-direction-models"></a>
+## 4. ML support signals: LightGBM direction models
 
-> ⚠️ **先泼冷水(必须诚实)**:股价预测在学术和业界都出了名的不可靠,市场接近随机游走,任何模型都极易"回测漂亮、实盘拉胯"。本功能定位为 **一个辅助参考信号,绝不是买卖依据**——你的估值纪律(上行空间%+前瞻PE)永远是主角,ML 只是配菜。
+ML is an auxiliary signal. It should surface uncertainty honestly and must never
+replace the valuation backbone.
 
-**设计原则(给 ML 套上缰绳):**
-1. **辅助而非主导**:只作"额外一栏参考",不参与选股打分主轴,不喂"会涨"的结论。
-2. **预测方向 > 预测点位**:预测"未来N天涨/跌概率"比预测"精确到几块几"更现实、更有用。
-3. **永远带不确定性**:任何预测都必须配置信区间/概率,不给单一确定数字。
-4. **可解释优先**:优先用能给"为什么"的模型(特征重要性),不用黑箱。
-5. **跑在后端**:训练/推理都在 Ubuntu 后端(Python 生态),App 只取结果——手机不适合训练。
+### 4.1 Layering and model choice
 
-### 4.1 分层与选型
+| Tier | Method | Prediction target | Explainability | Positioning |
+|---|---|---|---|---|
+| **T1 Time series** | Prophet / ARIMA | Price range over the next N days with confidence bands | High | Backup option only |
+| **T2 Tree models** | XGBoost / LightGBM | **Direction probability** over the next N days | High | **Selected starting point** |
+| **T3 Deep learning** | LSTM / GRU / Transformer | Price sequence or direction | Low | Optional phase-two path |
 
-| 层级 | 方法 | 预测目标 | 实现难度 | 可解释性 | 定位 |
-|------|------|---------|---------|---------|------|
-| **T1 时间序列** | Prophet / ARIMA | 未来N天价格区间(带置信带) | ★ 低 | ★★★ 高 | 备选,出"预测带"最快 |
-| **T2 树模型** ⭐荐起步 | XGBoost / LightGBM | 未来N天**涨跌方向+概率** | ★★ 中 | ★★★ 高(特征重要性) | 起步层建议,最佳性价比 |
-| **T3 深度学习** | LSTM / GRU / Transformer(TFT) | 价格序列/方向 | ★★★ 高 | ★ 低(黑箱) | 二期可选,收益边际 |
+LightGBM is the selected MVP path because it offers the best trade-off between
+speed, explainability, and operational simplicity for direction classification.
 
-> 业界共识:**对散户自用,T2(LightGBM 做方向分类)性价比最高**——比深度学习更稳、可解释、训练快;T3 深度学习在小数据+高噪声的股价上往往**不比 T2 强多少**,却难调难懂。
+### 4.2 Implementation details by method
 
-### 4.2 各方法实现细节
+**T1: time series - backup only**
 
-**T1:时间序列(Prophet / ARIMA)—— 未选,仅备选**
-- **输入**:单只股票历史收盘价(yfinance 1-2 年日线);**库**:`prophet`(自带置信带)或 `statsmodels` ARIMA。
-- **输出**:未来 5–30 天预测曲线 + 80%/95% 置信带,几行代码出"预测扇形带"。
-- **局限**:本质是趋势外推,**不懂基本面/突发事件**,只适合"无大新闻时的平滑预期"。故不作起步层。
+- Input: one stock's historical close series.
+- Output: projected range with uncertainty bands.
+- Limitation: trend extrapolation only; not the primary product signal.
 
-**T2:树模型(LightGBM 方向分类)—— ⭐ 荐为起步层**
-- **目标**:把"预测价格"改成**分类**:未来N天(如5天)收盘涨还是跌 → 输出**上涨概率%**。
-- **选 LightGBM(非 XGBoost)**:两者精度几乎持平(差距被股价噪声淹没),但 LightGBM **训练快 2–10 倍、更省内存、原生支持类别特征**(评级可直接喂),适合"后端每天重训的自用 App"。样本小时靠多股票拼训 + 调 `min_child_samples` 抹平过拟合。
-- **特征工程**(关键,决定上限):
-  - 技术类:收益率(1/5/20日)、MA偏离度、RSI、MACD、布林带位置、成交量变化
-  - 估值类(你的纪律!):**上行空间%、前瞻PE、评级**(把你的框架变成模型特征)
-  - 支撑压力类:**距最近支撑%、距最近压力%**(来自 §1.2)
-  - 波动类:历史波动率、ATR
-- **库**:`lightgbm` + `scikit-learn`(切分/评估);**输出**:`上涨概率 0.62` + 特征重要性排名。
-- **关键纪律**:**严格时间切分**(过去训练、未来测试,绝不泄露未来数据)+ **滚动回测**。
+**T2: LightGBM classification - selected**
 
-```python
-# LightGBM 方向分类(伪代码)
-import lightgbm as lgb
-# X: 特征(含上行空间%/RSI/距支撑%...), y: 未来5天涨=1/跌=0
-model = lgb.LGBMClassifier(
-    num_leaves=31, min_child_samples=30,  # 防过拟合
-    n_estimators=200, learning_rate=0.05,
+- Use separate models for:
+  - `intraday`: after each completed 5-minute bar, predict the probability of
+    direction over the next 30 minutes.
+  - `daily`: after market close, predict the probability of direction over the
+    next 5 trading days.
+- Prefer LightGBM over XGBoost for faster training and lower operational cost.
+- Feature groups:
+  - Short-horizon returns, volume change, VWAP deviation, and volatility
+  - Daily trend and technical features such as MA deviation and RSI
+  - Valuation features: upside percent, forward P/E, rating
+  - Support/resistance features: distance to nearest support and resistance
+  - Volatility features such as ATR or historical volatility
+- Development and release tooling may use `lightgbm` plus `scikit-learn` for
+  splitting, evaluation, calibration, export, and validation. None of that
+  training runtime ships as an in-app dependency.
+- Required evaluation discipline: strict time splits, rolling backtests, and
+  calibration checks.
+- Runtime contract:
+  - No project server training
+  - No on-device LightGBM training in the MVP
+  - Train and export during development or release tooling
+  - Convert the selected model to ONNX `TreeEnsemble`
+  - Bundle a versioned `.onnx` asset in the APK for MVP
+  - Run inference with ONNX Runtime Android
+  - Allow signed local ONNX model packages after installation
+  - Verify package signature, model checksum, feature-schema version, horizons,
+    input shape, and runtime compatibility before activation
+  - Install atomically and retain the last valid model for rollback
+
+**T3: deep learning - phase two**
+
+- Revisit only after the T2 pipeline is stable and demonstrably useful.
+
+<a id="43-live-inference-and-visualization-contract"></a>
+### 4.3 Live inference and visualization contract
+
+#### Inference timing
+
+| Signal | Input | Inference moment | Training cadence | Display |
+|---|---|---|---|---|
+| `30m` live direction | Completed local 5-minute OHLCV plus intraday features and the latest cached fundamental snapshot | After every completed 5-minute bar | Evaluated during release tooling; updated by APK release or verified signed import | Probability line on the market chart plus summary card |
+| `5d` medium-term direction | Daily technical, valuation, and support/resistance features | After each market close | Evaluated during release tooling; updated by APK release or verified signed import | ML card or gauge |
+
+The app may poll snapshots more frequently, but it must update the visible
+prediction only when `asOf` changes. Calculations use exchange-time-correct bar
+boundaries, while displayed timestamps are converted to the device local
+timezone.
+
+The local model layer must expose at least this contract:
+
+```kotlin
+data class PredictionSnapshot(
+    val symbol: String,
+    val horizon: String,
+    val asOf: Instant,
+    val probabilityUp: Double,
+    val confidence: String,
+    val modelVersion: String,
+    val featureWindow: String,
+    val dataFreshness: String,
+    val walkForwardAccuracy: Double?,
+    val calibrationError: Double?
 )
-model.fit(X_train, y_train)  # 严格时间切分
-prob_up = model.predict_proba(X_latest)[:,1]  # → 上涨概率 0.62
-importance = model.feature_importances_       # → 可解释
 ```
 
-**T3:深度学习(LSTM/Transformer)—— 二期可选,MVP 不做**
-对"单股、日线、样本少"的场景,**LSTM 极易过拟合、实盘提升有限**,Transformer/TFT 更重、难调难懂,投入产出比差。等 T2 跑通且确实想深入再说。
+The client must reject any snapshot that omits `horizon`, `asOf`, or
+`modelVersion`, and it must surface stale-state warnings clearly.
 
-### 4.3 结果可视化与产品红线
+#### Visualization
 
-每种方法配一张"诚实展示不确定性"的图,共 4 张(图表规格见 [MASTER §5](design-system/ai-stock-analyst/MASTER.md),落点见 [`design.md` §6](design.md#6-图表设计可视化清单)):
+- Chart placement and interaction live in [`design.md`](design.md).
+- Visual tokens live in
+  [MASTER](design-system/ai-stock-analyst/MASTER.md).
+- Model-facing text should reuse the canonical disclaimer from
+  [`ai-prompt.md`](ai-prompt.md).
 
-1. **预测扇形带图(Forecast Fan)—— T1**:历史实线 + 未来预测虚线 + 半透明置信带(越远越宽),**强调"区间"而非单点**。
-2. **涨跌概率仪表(Gauge)—— T2 主图**:指针指向"未来5天上涨概率 62%",**必配免责**"模型参考,非买卖建议"(配色走中性/紫金,不用估值红绿)。
-3. **特征重要性条形图 —— T2 可解释性**:横向条展示"本次预测哪些因素影响最大"(如 上行空间% 0.31、RSI 0.18…),让你看清模型是否在用你认可的逻辑(估值)而非乱学噪声。
-4. **回测对比图 —— 诚实度检验(最重要)**:历史区间内**预测 vs 实际**两条线叠加 + 方向准确率%、MAE/RMSE。**这张图是防自欺的关键**——让你看清模型到底准不准。
+Allowed model visuals:
 
-**架构落点(跑在哪):**
+1. A probability gauge or badge labeled with horizon and snapshot time
+2. Feature-importance bars for explainability
+3. Backtest comparison charts
+4. A time-series probability line for the `30m` classifier, rendered on its own
+   labeled scale or sub-panel rather than as a fabricated future price path
+
+Not allowed:
+
+- Fake future candles
+- Deterministic price paths from a classifier
+- Hidden backtest quality
+
+**Runtime architecture**
+
+```text
+[Development / release tooling]
+  -> train and validate LightGBM models offline
+  -> export selected models to ONNX TreeEnsemble
+  -> package versioned .onnx assets with the APK
+  -> optionally produce signed import packages
+        ▼
+[Android app]
+  -> verify and atomically activate bundled or imported model packages
+  -> build completed local 5-minute bars
+  -> run ONNX Runtime Android inference after each completed bar or market close
+  -> persist versioned PredictionSnapshot records in Room
+  -> render probability, uncertainty, freshness, and backtest quality
 ```
-[Ubuntu 后端] 拉数据(yfinance 历史日线) → 训练/加载模型(LightGBM/Prophet,每日/每周离线训练一次,存模型文件)
-  → 推理 → 输出 {预测带, 涨跌概率, 特征重要性, 回测指标} → 暴露 GET /predict/{symbol} 返回 JSON
-        ▼  [Flutter App] 取 JSON → 用 fl_chart 画 ①②③④ 图
-```
-- **训练在后端离线做**(慢、重),App 只取**已算好的结果**(秒回);模型按天/周重训即可,不需实时训练。
-- **详情页叠加呈现**:除上述 4 张图,方向预测还叠加在个股详情页**实时行情图右缘**(短虚线投影 + 涨跌概率标签,配色中性/紫金,见 [`design.md` §6.2](design.md#62-核心可视化清单按优先级)⑥);节奏 = **每周离线重训 + 每交易日收盘后推理一次**(非实时),后端 `/predict` 每日收盘后产出结果供 App 秒取。
 
-**写进产品的红线(必须写进代码/UI):**
-1. **回测要诚实**:展示真实方向准确率(通常 50–60% 就算不错,别美化),防过拟合靠严格时间切分 + 滚动验证 + 特征不泄露未来。
-2. **每个预测页固定免责**:"模型预测仅供参考,非投资建议,历史不代表未来"。
+**Real-time display policy**
 
-> 与你的投资框架对齐:你本就**偏好历史趋势分析、反对价格预测**。这个 ML 模块的正确姿势是——**"给个参考概率 + 老实展示它有多不准",而不是"告诉你买它会涨"。** 已明确的技术定位(非开放问题):ML 只做辅助信号、不单独下结论;深度学习 T3 放二期;把"上行空间%/前瞻PE"作为模型特征(让纪律进模型)。
+1. Show every structurally valid `30m` and `5d` prediction without applying an
+   accuracy or calibration threshold.
+2. Always show model version, freshness, walk-forward quality, calibration
+   quality, and the canonical disclaimer beside the prediction.
+3. Use `Model temporarily unavailable` only when the model package is invalid,
+   required features are missing, inference fails, or the snapshot is stale.
+4. Prediction output must remain subordinate to valuation and risk
+   interpretation.
+5. The `30m` prediction line must remain a probability visualization, not a
+   fake future price line or future-candle preview.
 
----
+**Signed model package contract**
 
-## 5. 决策登记
+A locally imported package must include the ONNX model plus a signed manifest
+containing at least:
 
-本文相关决策(量化指标 I1–I4 与 C、选股 S1–S4、AI 层 Q1/Q3/Q4、ML M1–M3)的唯一出处是 [`architecture.md` §3.2 决策台账](architecture.md#3-决策台账全项目唯一决策出处),本文不再单列决策清单。
+- model identifier and version
+- supported horizon
+- feature-schema version and ordered feature list
+- input shape and ONNX Runtime compatibility
+- training cutoff
+- walk-forward and calibration metrics
+- model checksum
+- package signature and signer identifier
+
+The app verifies the signature against a trusted local public key, validates
+the checksum and schema, installs the package atomically, and preserves the
+previous valid model for rollback.

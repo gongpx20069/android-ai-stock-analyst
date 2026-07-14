@@ -1,149 +1,232 @@
-# 行情数据源调研报告
+# Data Source Implementation Specification
 
-> 调研时间:2026-06-30 ｜ 方法:Web 搜索多家 2026 年实测对比文章 + 各厂商官方文档 + 用真实持仓(NVDA/GOOGL/AMZN)实测 yfinance 字段。
-> 结论会**反过来影响决策点 B(数据从哪来)**,请重点看 §1 和 §6。
-
----
-
-## 1. TL;DR(一句话结论)
-
-⚠️ **核心矛盾被实测确认了**:你的估值纪律第一指标是「**分析师目标价 → 上行空间%**」,而 **2026 年几乎所有免费行情 API 的"分析师目标价"都已转为付费**(Finnhub 也是)。**唯一能免费、完整拿到目标价+评级+前瞻PE 的来源是 Yahoo Finance(yfinance)**——但它是 Python 库,**安卓端不能直接跑**,必须有一层后端包它。
-
-→ 由此收敛出三个方案(详见 §6),**结论:首选③(国内价直连 + yfinance 薄后端取基本面)**,既拿全你要的字段,又让国内实时价体验最好。
+> This document owns the selected **direct Android provider clients**, exact
+> endpoint quirks, freshness behavior, fallback rules, local cache metadata,
+> and implementation checks. It does not compare the broader vendor market.
+> For system boundaries, see [`architecture.md`](architecture.md). For chart
+> placement and AI/ML use of these fields, see [`design.md`](design.md) and
+> [`analysis.md`](analysis.md).
 
 ---
 
-## 2. 免费 API 横评(2026 实测数据)
+## 1. Selected local-only data architecture
 
-> ⚠️ 额度均截至 2026-05 核对,厂商常改,部署前需复验(数据来源见文首方法说明)。
+| Responsibility | Selected source | Notes |
+|---|---|---|
+| Live quote snapshot | Tencent primary | China-friendly quote access without keys |
+| Live quote fallback | Sina fallback | Used only when Tencent fails or returns unusable data |
+| Intraday and higher-timeframe OHLCV | Tencent chart endpoints | Powers live charts, local bar aggregation, and feature generation |
+| Screening universe | Nasdaq public screener | Operating-company securities listed on NASDAQ, NYSE, and NYSE American |
+| Fundamental and analyst snapshot | Direct Yahoo Finance HTTP `quoteSummary` client in Android | Unofficial and revocable; cached locally in Room |
+| Derived indicators | Local Kotlin calculation engine | Deterministic indicators are calculated on-device |
+| Prediction snapshots | ONNX Runtime Android | LightGBM inference runs on-device from bundled model assets |
 
-| 厂商 | 免费额度 | 现价/K线 | **分析师目标价** | 评级 | 前瞻PE/基本面 | 信用卡 | 备注 |
-|------|---------|---------|----------------|------|--------------|--------|------|
-| **Finnhub** | 60次/分(~300/天) | ✅ 实时(有限) | ❌ **已转付费** | ⚠️ 仅"买/持/卖家数"(Recommendation Trends 免费) | ⚠️ Basic Financials 免费档有 | 不需要 | 免费档限商用 |
-| **Alpha Vantage** | **25次/天** | ✅ 延迟15分 | ⚠️ 有限 | ⚠️ | ⚠️ | 不需要 | 额度太小,2026 已不推荐 |
-| **FMP** | 250次/天 | ⚠️ 仅EOD | ⚠️ 不确定(免费档收紧中) | ⚠️ | ✅ 年报基本面 | 不需要 | 150+端点但免费档多被锁 |
-| **Twelve Data** | 800次/天 | ✅ 延迟 | ❌ 弱 | ❌ | ❌ | 不需要 | K线好,基本面差 |
-| **Alpaca** | 无日上限,5次/秒 | ✅ 实时(美股) | ❌ 无 | ❌ | ❌ | 不需要 | 纯价格,无分析师数据 |
-| **Polygon.io** | 5次/分(新档无免费) | ✅ | ❌ | ❌ | ⚠️ | 需要 | 基本已无真免费档,$29起 |
-| **腾讯 qt.gtimg.cn** | 无明文限制 | ✅ 实时 | ❌ 无 | ❌ | ⚠️ 仅 TTM PE | 不需要 | **国内直连稳、免key、免翻墙** |
-| **新浪 hq.sinajs.cn** | 无明文限制 | ✅ 实时 | ❌ 无 | ❌ | ⚠️ 仅 TTM PE | 不需要 | **国内直连稳**;需 Referer、GBK编码 |
-| **搜狐** | — | ❌ 仅A股页面 | ❌ | ❌ | ❌ | — | 无干净美股 API,排除 |
-| **yfinance(Yahoo)** | 无明文限制 | ✅ | ✅ **完整** | ✅ 完整 | ✅ **完整** | 不需要 | ⚠️ 非官方、Python库、会偶尔失效;国内需绕路 |
-
-> 实测文一致结论:**Finnhub 是"纯API直连"里免费档最强的(60次/分 + 免费WebSocket)**;**Alpha Vantage 已废(25次/天)**;**yfinance 字段最全但最脆**(Yahoo 改版会挂,几天后社区修复)。
+The app uses a split design on purpose: fast quote access comes from domestic
+quote endpoints, while slower-moving valuation data is normalized separately in
+local storage. No project server exists between the app and these providers.
 
 ---
 
-## 3. 关键发现:免费档"分析师目标价"几乎全军覆没
+## 2. Quote endpoints and contracts
 
-直接戳中你框架的第一指标(上行空间%):§2 表「分析师目标价」一列几乎全是 ❌/⚠️——Finnhub 已转 Premium(免费只剩买/持/卖**家数**)、FMP 免费档持续上收,其余要么没有要么受限。
+### 2.1 Tencent quote endpoint and symbol quirks
 
-✅ **唯独 yfinance 免费给全**:`targetMedianPrice`、`numberOfAnalystOpinions`、`recommendationKey`、`forwardPE` 一应俱全。
+- Endpoint: `https://qt.gtimg.cn/q=usNVDA`
+- Symbol contract:
+  - Prefix US symbols with `us`
+  - Keep the ticker uppercase
+  - Do **not** append exchange suffixes such as `.OQ`
+- Response shape: raw `~`-delimited text that must be mapped by positional
+  index
+- Required mapped fields:
+  - current price
+  - daily change and change percent
+  - open
+  - previous close
+  - volume
+  - TTM P/E when present
+  - market cap when present
+  - 52-week high and low when present
+
+Use Tencent as the default real-time quote source.
+
+### 2.2 Sina fallback endpoint, header, and decoding
+
+- Endpoint: `https://hq.sinajs.cn/list=gb_aapl`
+- Symbol contract:
+  - Prefix US symbols with `gb_`
+  - Keep the ticker lowercase
+- Required request header:
+  - `Referer: https://finance.sina.com.cn`
+- Response shape:
+  - comma-delimited text
+  - GBK-encoded; decode to UTF-8 before parsing
+
+Use Sina only as a fallback when Tencent fails, times out, or returns an
+invalid payload.
+
+<a id="23-tencent-chart-endpoints-and-5-minute-aggregation"></a>
+### 2.3 Tencent chart endpoints and 5-minute aggregation
+
+- Same-day intraday line:
+  `GET https://web.ifzq.gtimg.cn/appstock/app/minute/query?code=usAAPL`
+- Daily / monthly candles needed for the committed MVP timeframes:
+  `GET https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param=usAAPL,day|month,,,N,qfq`
+- Minute candles for supported higher intraday intervals:
+  `GET https://web.ifzq.gtimg.cn/appstock/app/kline/kline?param=usAAPL,m60|m30|m15,,,N`
+- Four-hour candles are aggregated locally from completed 1-hour bars using
+  exchange-time session boundaries.
+
+For the MVP, the Android app must build **completed 5-minute bars** locally by
+aggregating verified 1-minute data in exchange time. Re-check any undocumented
+direct `m5` endpoint before release; if it proves stable, it may be used as a
+replenishment or fallback source, not as an unverified assumption.
+
+Implementation requirements:
+
+- Persist bars by `(symbol, barStart)`
+- Deduplicate source overlap
+- Never use an unfinished bar as a model label or inference input
+- Normalize timestamps according to the canonical symbol and exchange-time model
+  in [`architecture.md`](architecture.md)
+- Keep exchange-time grouping and bar boundaries in storage; convert visible
+  time labels to the device local timezone in the UI layer
 
 ---
 
-## 3.5 国内源实测:腾讯 / 新浪(2026-06-30 真跑)
+<a id="24-us-exchange-screening-universe"></a>
+### 2.4 US exchange screening universe
 
-腾讯/新浪确实有美股 API,最大价值是"**国内直连稳、免 key、免翻墙**",但**拿不到分析师目标价/评级/前瞻PE**。
-
-### ✅ 腾讯(`qt.gtimg.cn`)— 最干净
-- 接口:`https://qt.gtimg.cn/q=usNVDA`(美股前缀 `us`,**不带 `.OQ` 后缀**,带后缀返回 `v_pv_none_match`)
-- 返回 `~` 分隔裸串,能拿:**现价、涨跌、开/昨收、成交量、TTM PE、市值、52周高低**,中文名直接给。
-
-### ✅ 新浪(`hq.sinajs.cn`)— 需小技巧
-- 接口:`https://hq.sinajs.cn/list=gb_aapl`(美股前缀 `gb_` + 小写代码)
-- ⚠️ 必须带 `Referer: https://finance.sina.com.cn`,返回 **GBK 编码**要转 UTF-8;字段和腾讯类似(现价/涨跌/PE-TTM/市值/52周高低/盘前盘后)。
-
-### ❌ 共同短板 & 结论
-- **无分析师目标价、无评级、无前瞻PE**(只有 TTM PE);连它们 App 端的机构评级逆向接口(腾讯 `proxy.finance.qq.com`/`web.ifzq.gtimg.cn`、新浪 `US_AnalystRatingService`)**实测全部已失效**。搜狐只剩 A 股页面,排除。
-- 💡 定位:腾讯/新浪 = 优秀"价格层",但补不上核心指标(上行空间%)→ 催生下面混合**方案③**。
-
----
-
-## 3.6 腾讯实时行情图接口(详情页实时行情图数据源)
-
-> 2026-07-04 实测 **code:0**。详情页「实时行情图」(分时/日K/周K/月K + LightGBM 方向预测叠加)完全走**方案③国内价层,无需 yfinance**。US 代码 = 前缀 `us` + **大写**代码,**不加 `.OQ` 后缀**。
-
-- **当日分时**:`GET https://web.ifzq.gtimg.cn/appstock/app/minute/query?code=usAAPL` → `data.usAAPL.data.data` = `["HHMM 价 量", ...]`
-- **日/周/月K**:`GET https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param=usAAPL,day|week|month,,,N,qfq` → `data.usAAPL.day` = `[[日期,开,收,高,低,量], ...]`
-- **分钟K(60/30/15分)**:`GET https://web.ifzq.gtimg.cn/appstock/app/kline/kline?param=usAAPL,m60|m30|m15,,,N`
-- 刷新节奏见 [`design.md` §7](design.md#7-状态设计空加载错误)(分时 30–60s 轮询/下拉、日周月K 收盘后);方向预测叠加与推理节奏见 [`analysis.md` §4.3](analysis.md#43-结果可视化与产品红线)。
-
----
-
-## 4. 实测证据:yfinance 拉你持仓(2026-06-30 真跑)
-
-用 `yfinance` 实跑你持有的三只,字段全部拿到,完全够支撑你的估值纪律:
-
-| 字段 | NVDA | GOOGL | AMZN | 对应你的框架 |
-|------|------|-------|------|------------|
-| currentPrice 现价 | 198.09 | 356.11 | 238.61 | 盈亏基准 |
-| **targetMedianPrice 中位目标价** | 294.0 | 430.0 | 315.0 | **上行空间分子** |
-| **numberOfAnalystOpinions 分析师数** | 58 | 53 | 63 | 过滤低置信 |
-| **recommendationKey 评级** | strong_buy | strong_buy | strong_buy | 卖出信号之一 |
-| **forwardPE 前瞻PE** | 15.5 | 24.5 | 24.1 | 你的核心估值 |
-| trailingPE | 30.3 | 27.1 | 31.4 | 对比 |
-| 52周高/低 | 236.5/151.5 | 408.6/172.8 | 278.6/196.0 | 位置 |
-| 50日/200日均线 | 210.0/190.7 | 369.6/314.4 | 256.0/232.8 | 技术辅助 |
-
-> 上行空间%示例(NVDA):(294 ÷ 198.09 − 1) ≈ **+48%**。这正是你要的指标,而且**完全免费拿到**。
-> 注:这套字段正是你现在每天 WeChat 监控报告用的同一套数据通路。
+- Fetch each exchange separately:
+  - NASDAQ:
+    `GET https://api.nasdaq.com/api/screener/stocks?exchange=nasdaq&download=true`
+  - NYSE:
+    `GET https://api.nasdaq.com/api/screener/stocks?exchange=nyse&download=true`
+  - NYSE American:
+    `GET https://api.nasdaq.com/api/screener/stocks?exchange=amex&download=true`
+- The Android client must send realistic `User-Agent` and `Accept` headers and
+  treat the endpoint as revocable web infrastructure rather than a guaranteed
+  public API.
+- Include:
+  - common stocks listed on NASDAQ, NYSE, or NYSE American
+  - ADRs on those exchanges only when the required valuation and analyst fields
+    are available
+- Exclude:
+  - ETFs and other funds
+  - warrants and rights
+  - units
+  - preferred shares
+  - rows without a usable symbol, supported primary exchange, or
+    operating-company classification
+- Normalize the exchange identifier and deduplicate by canonical symbol plus
+  primary exchange before screening.
+- Persist the normalized universe and its `fetchedAt` time in Room so screening
+  can continue from the last good list when refresh fails.
 
 ---
 
-## 5. GitHub 生态参考(详见 [`analysis.md` §3](analysis.md#3-github-对标与多智能体方案))
+## 3. Required fundamental fields from direct Yahoo Finance HTTP `quoteSummary`
 
-- **go-stock(⭐6600+)**:桌面端,证明"软件免费 + 自己 key"模式成立,但**不在手机端取数**,绕开了本难题。
-- **orthogonal.info 实测博主**最终用 **Finnhub(实时价)+ Polygon(EOD)+ yfinance(每周基本面)** 混用——印证"没有单一免费源能全包",基本面/分析师数据靠 yfinance。本文方案③即其"价格源+基本面源分离"的国内优化版。
-- 多数 Flutter 开源股票 App 只做"价格+K线",**普遍不做分析师目标价**——正因免费档拿不到。
+Yahoo Finance is used directly from Android through an encapsulated
+`quoteSummary` client, for example:
 
----
-
-## 6. 三个现实方案对比(决策 B,登记在 architecture.md)
-
-> 结论:**首选③,其次①,②不推荐**。决策 B 的最终勾选见 [`architecture.md` §3](architecture.md#3-决策台账全项目唯一决策出处);本节只做方案对比论证。
-
-### 方案①:极薄自建后端(FastAPI + yfinance)— ⭐ 推荐
+```text
+GET https://query1.finance.yahoo.com/v10/finance/quoteSummary/AAPL?modules=price,financialData,summaryDetail,defaultKeyStatistics,recommendationTrend,assetProfile
 ```
-[安卓App/Flutter] --HTTPS--> [你的极薄后端 FastAPI] --> yfinance --> Yahoo
-                                   ↑ 复用你每天监控那套代码
-```
-- ✅ **能拿全字段**(目标价/评级/前瞻PE/均线),完全符合估值纪律;复用现成 yfinance 监控代码,近零新开发;后端可缓存降低 Yahoo 失效影响。
-- ❌ 需一台常开机器(你这台 Ubuntu 即可);yfinance 偶尔需跟进 Yahoo 改版。符合你"部署后直接观察、不搞监控告警"的习惯。
 
-### 方案②:纯无服务器,App 直连 Finnhub 免费档
-```
-[安卓App/Flutter] --HTTPS--> Finnhub(现价/评级家数/基本面) 直连
-```
-- ✅ 零服务器、装上即用,Finnhub 免费档慷慨(60次/分)。
-- ❌ **拿不到分析师目标价 → 算不出"上行空间%"**(第一指标缺失),评级只有买/持/卖家数。可用 FMP 免费档补但需实测且更脆。
+This is an unofficial, revocable interface. Cookie, crumb, header, or session
+handling can change without notice and must stay isolated inside the local
+client. The app must request only the modules it needs and tolerate missing
+subtrees without crashing unrelated features.
 
-### 方案③:混合 — App 直连腾讯/新浪取价 + 薄后端 yfinance 取基本面 — ⭐⭐ 最优
-```
-[安卓App/Flutter] ──直连──> 腾讯/新浪   (实时价/涨跌/PE-TTM,国内秒开免key)
-       │
-       └──HTTPS──> [薄后端 FastAPI + yfinance]  (目标价/评级/前瞻PE,变化慢、每日缓存)
-```
-- ✅ **各取所长**:价格层用国内源(快/稳/免翻墙/免key),基本面层用 yfinance(唯一免费给全);上行空间%、前瞻PE 全有。
-- ✅ 后端只需每天拉一次并缓存,**调用量极小、失效影响小**;实时价走国内源,**用户在中国体验最好**(不依赖后端能否访问 Yahoo)。
-- ❌ 仍需常开机器跑薄后端;两个数据源需做字段对齐。本质是 orthogonal 博主"价格源+基本面源分离"的国内优化版。
+The app must normalize and cache at least these fields:
 
-### 📊 一句话对比
-| | ① 薄后端+yfinance | ② 纯直连Finnhub | ③ 国内价+yfinance基本面 |
-|---|---|---|---|
-| 上行空间%(你的核心) | ✅ 有 | ❌ 没有 | ✅ 有 |
-| 前瞻PE | ✅ 有 | ⚠️ Basic Financials | ✅ 有 |
-| 实时价国内体验 | ⚠️ 看后端能否连Yahoo | ⚠️ 一般 | ✅ **最好(国内直连)** |
-| 要不要养服务器 | 要 | 不要 | 要(但调用量更小) |
-| 开发量 | 小 | 中 | 中(两源对齐) |
-| 数据稳定性 | 中(Yahoo会改版) | 高 | ✅ 高(价格层不依赖Yahoo) |
+| Field group | Required fields |
+|---|---|
+| Valuation core | `targetLowPrice`, `targetMedianPrice`, `targetHighPrice`, `forwardPE`, `currentPrice` when needed for reconciliation |
+| Analyst coverage | `numberOfAnalystOpinions`, `recommendationKey`, and any bucket counts needed to express rating strength |
+| Positioning context | `fiftyDayAverage`, `twoHundredDayAverage`, `fiftyTwoWeekLow`, `fiftyTwoWeekHigh` |
+| Screening support | `marketCap`, `averageDailyVolume3Month` or equivalent, sector and industry when available |
+
+These fields are required because they feed:
+
+- upside calculation
+- analyst low/median/high target-range presentation outside the market chart
+- screening weights
+- anti-chasing checks
+- AI interpretation input
+- ML feature engineering
+
+This document does not define the prompt schema or scoring rules; those belong
+to [`analysis.md`](analysis.md) and [`ai-prompt.md`](ai-prompt.md).
+
+When Yahoo fails, valuation-dependent features may become stale or unavailable,
+but live quotes, charts, local technicals, and existing watchlists must
+continue to work.
 
 ---
 
-## 7. 待办(技术落点,非决策)
+## 4. Freshness, fallback, local cache, and implementation checklist
 
-> 数据源方案选择(决策 B)已登记到 [`architecture.md` §3](architecture.md#3-决策台账全项目唯一决策出处)。这里只留**定了方案后要做的技术活**:
+### 4.1 Freshness and fallback behavior
 
-- 若③:定后端最小端点(如 `GET /fundamentals/{symbol}` 每日缓存)+ App 端腾讯/新浪取价的字段解析
-- 若①:确认后端跑你这台 Ubuntu;定端点 `GET /analyze/{symbol}`
-- 腾讯/新浪字段位置需写一份"字段对照表"(返回是 `~`/`,` 分隔的裸串,需按位取)
+| Data surface | Freshness expectation | Fallback / stale behavior |
+|---|---|---|
+| Live quote snapshot | Poll every 30-60 seconds or refresh manually | Fall back from Tencent to Sina; if both fail, show stale quote status and keep the last good timestamp visible |
+| Intraday bars for charting and ML | Use only completed bars | If a gap cannot be repaired, mark intraday predictions stale rather than guessing |
+| Daily / monthly candles | Refresh after market close or when the vendor publishes the new bar | Keep the last good history and show the chart timestamp |
+| Fundamental snapshot | Refresh on a daily cache cadence | Keep the last good cache in Room and show freshness warnings when analyst data is stale |
+| Screening cache | Refresh in WorkManager batches under network and battery constraints | Resume from the last successful stage or page instead of restarting the universe every time |
+
+Prediction timing and response schema are owned by
+[`analysis.md` §4.3](analysis.md#43-live-inference-and-visualization-contract).
+
+### 4.2 Local cache contract
+
+Every normalized quote, bar, fundamental snapshot, and prediction snapshot
+stored in Room should retain:
+
+- `symbol`
+- `source`
+- `fetchedAt`
+- `asOf`
+- `exchangeTimestamp` or `barStart`
+- `parseStatus`
+- `staleAfter` when applicable
+
+The repository layer should expose exchange-time-correct models to calculations
+and screening, while the presentation layer is responsible for converting
+timestamps to the device local timezone for display.
+
+Completed 5-minute bars are derived locally from 1-minute data and persisted as
+first-class records so screening, indicators, and the intraday model can all
+reuse the same canonical bar set.
+
+### 4.3 Implementation checklist
+
+- [x] Map Tencent and Sina fields explicitly by positional index; do not rely on
+      undocumented field names.
+- [x] Encapsulate Yahoo cookie, crumb, session, and module handling inside the
+      direct Android client; do not leak provider quirks into UI code.
+- [x] Normalize quote timestamps using the canonical exchange-time model from
+      [`architecture.md`](architecture.md).
+- [ ] Normalize candle timestamps after historical bar ingestion is added.
+- [x] Record `source`, `fetchedAt`, parse status, and `staleAfter` for normalized
+      quote and fundamental snapshots.
+- [x] Distinguish quote freshness from fundamental freshness in local models and
+      repository results.
+- [x] Keep quote refresh and cached watchlist data available when Yahoo
+      valuation refresh fails.
+- [ ] Build completed 5-minute bars locally and never infer from unfinished
+      bars.
+- [ ] Persist screening progress, page cursors, and stage markers so background
+      refreshes can resume cleanly.
+- [ ] Revalidate undocumented endpoints, headers, response shapes, and practical
+      anti-bot limits before release.
+- [ ] Treat undocumented vendor behavior as revocable; add monitoring and
+      backoff instead of assuming stability.
+
+Yahoo may return a regional unavailability page instead of a crumb from
+networks where its services are blocked. The client rejects that response
+explicitly, and the repository retains the last good valuation cache; the app
+must not present this condition as a successful refresh.

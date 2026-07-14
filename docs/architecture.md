@@ -1,85 +1,207 @@
-# 架构设计与决策台账
+# Architecture and Decision Ledger
 
-> 本文是本项目的**决策中枢**,只做三件事:①讲清核心矛盾 ②汇总**全项目所有决策**(已定 / 待拍板)③索引各子文档。
-> **单一出处原则**:任何子文档产生的"待拍板"问题,一律登记到本文 §3 决策台账,子文档内不再各自散落决策清单。
-
----
-
-## 1. 一句话目标
-
-安卓 App:输入股票代码 → 拉行情 + 算量化指标 → 调**用户自己的 Azure OpenAI** 做解读 → 输出一份"按我的估值纪律"写的分析报告。(项目定位见 [`../README.md`](../README.md))
+> This document is the project's **engineering decision hub**: it defines
+> system boundaries, records locked and pending decisions, and indexes the
+> specialized documents. For the product overview, see
+> [`../README.md`](../README.md) or [`../README.zh-CN.md`](../README.zh-CN.md).
+> For agent working constraints, see [`../CLAUDE.md`](../CLAUDE.md).
 
 ---
 
-## 2. 核心矛盾:数据从哪来(驱动全盘技术选型)
+## 1. Goals and boundaries
 
-手机端做股票分析,最大难点**不是 AI,而是数据**:
+Native Android app: build watchlists and screen major US exchanges -> fetch
+quotes and fundamentals directly on-device -> calculate deterministic
+indicators locally -> display TradingView-inspired market charts and LightGBM
+probability signals -> optionally call the user's own Azure OpenAI setup
+directly from Android to generate structured interpretation.
 
-- yfinance 是 Python 库,**安卓上不能直接跑**;
-- 2026 年免费行情 API 的"分析师目标价"几乎全转付费,**只有 yfinance 免费给全**(实测验证);
-- 腾讯/新浪 API 国内直连稳、免 key,但**只有价格,无目标价/前瞻PE**。
+Boundaries:
 
-→ 结论:**技术栈 + 数据源是一对绑定决策**,且"分析师目标价"这一核心指标决定了必须有一层 yfinance 后端。详见 [`data-sources.md`](data-sources.md)。
+- Output data, probabilities, explanations, and non-transactional research
+  suggestions, but never order placement or personalized trading instructions.
+- The product is **watchlist-only**. It does not model holdings, portfolio
+  lots, cost basis, staged buys, partial sells, trade execution, or brokerage
+  workflows.
+- No project server exists. Runtime networking, caching, screening,
+  calculations, and model inference all stay inside the Android app.
+- Market calculations use the exchange calendar and exchange time, including
+  DST, holidays, and completed-bar boundaries. Every timestamp displayed to the
+  user is converted to the Android device's local timezone.
+- The Azure Key is stored on-device and sent only to the user-configured Azure
+  endpoint.
+- "TradingView-inspired" refers only to interaction quality and information
+  organization, not to copying its brand, proprietary code, or assets.
 
----
+## 2. System overview
 
-## 3. 决策台账(全项目唯一决策出处)
+```text
+┌──────────────────── Native Android App ────────────────────┐
+│ Kotlin + Jetpack Compose + Material 3                      │
+│ Watchlist / Screening / AI / Me                            │
+│ Direct provider clients: Tencent / Sina / Yahoo HTTP       │
+│ Room cache + repositories                                  │
+│ WorkManager refresh and screening pipeline                 │
+│ Local indicator engine + screening engine                  │
+│ ONNX Runtime Android for LightGBM inference                │
+│ On-device 3+1 Azure orchestration                          │
+│ Vico + Compose overlays: candlesticks, volume, probability │
+│ line, crosshair, pan/zoom, landscape                       │
+└───────────────┬──────────────────┬──────────────────┬───────┘
+                │ HTTPS             │ HTTPS            │ HTTPS
+                ▼                   ▼                  ▼
+        Tencent / Sina        Yahoo Finance      Azure OpenAI
+        quotes + OHLCV        quoteSummary       user-configured endpoint
+```
 
-### 3.1 已定 ✅
+### 2.1 Android runtime boundary
 
-| 编号 | 决策点 | 结论 | 详见 |
-|------|--------|------|------|
-| **A** | 技术栈 | **Flutter / Dart**。理由:复用 mochi-pet 打包/签名经验;本 App 重 UI(卡片/估值表/K线/AI排版),`fl_chart` 顺手;一套代码可扩 iOS。排除 Java、原生 Kotlin、Python 套壳、PWA。 | 本文 |
-| **U2** | 配色语义(灵魂) | **反直觉**:🔴红=贵/追高(非"跌")、🟢绿=有上行空间(非"涨");红绿**必配 ↑↓ 图标+文字标签**。对冲"跌了就想买/追涨"本能。 | [MASTER §2](design-system/ai-stock-analyst/MASTER.md) |
-| **I1** | 支撑压力算法 | **4 种全做**(枢轴点/波段高低/斐波那契/均线),**波段+均线为主轴**(贴中线风格),枢轴/斐波作"更多"展开。纯 numpy,已用 NVDA 实测。 | [analysis §1.2](analysis.md#12-支撑压力位必做4-种算法) |
-| **I2** | 支撑压力呈现 | 醒目数字卡"距最近支撑 −X% / 距最近压力 +Y%",与上行空间%、前瞻PE 并列。 | [analysis §1.2](analysis.md#12-支撑压力位必做4-种算法) |
-| **I3** | 共振高亮 | 被 ≥2 种算法命中的价位加粗标可靠度。 | [analysis §1.2](analysis.md#12-支撑压力位必做4-种算法) |
-| **I4** | 技术面 MVP | MA50/200 + RSI(14) + 52周位置;MACD/布林/ATR 放二期。 | [analysis §1.3](analysis.md#13-技术面辅助) |
+- Kotlin, Jetpack Compose, Material 3, and single-activity.
+- MVVM plus unidirectional data flow; Coroutines and Flow manage streaming
+  state.
+- Hilt for dependency injection; Retrofit and OkHttp for networking; Room for
+  structured cache; DataStore for settings; Android Keystore for Azure Key
+  encryption.
+- Direct Android clients fetch:
+  - Tencent primary and Sina fallback live quotes and OHLCV
+  - Yahoo Finance `quoteSummary` modules for valuation and analyst fields
+- Room stores normalized quote, bar, fundamental, screening, and prediction
+  snapshots with source and freshness metadata.
+- WorkManager handles batched screening refreshes, model/data maintenance, and
+  resumable background work under network and battery constraints.
+- Deterministic indicators and support/resistance calculations run locally in
+  Kotlin.
+- ONNX Runtime Android runs bundled LightGBM models on-device. The `30m` model
+  infers after each completed local 5-minute bar. The `5d` model infers after
+  market close.
+- The app calls three analysis agents in parallel on-device, then calls the
+  arbiter agent. The Azure Key is included only in requests sent directly to
+  the user-configured Azure endpoint.
+- Vico Compose provides the candlestick, line, and column base layers; Compose
+  overlays and custom drawing add the crosshair, labeled probability line,
+  indicator layers, and TradingView-inspired interactions.
 
-### 3.2 待拍板 ❓
+### 2.2 External dependency boundary
 
-| 编号 | 决策点 | 选项 / 建议 | 详见 |
-|------|--------|------------|------|
-| **B** | 数据源方案 | **③国内价+yfinance基本面(⭐荐)** / ①纯yfinance后端 / ②纯直连Finnhub(缺目标价,不荐) | [data-sources §6](data-sources.md) |
-| **C** | 量化指标 MVP 增减 | 现集=估值+支撑压力+技术+盈亏;是否加资金流/情绪/板块对比 | [analysis §1](analysis.md#1-估值指标支撑压力与技术面) |
-| **D** | AI 厂商兼容 | Azure 之外要不要也兼容普通 OpenAI / DeepSeek | 本文 |
-| **E** | 数据/安全边界 | key/自选/成本全本地存不上云(已倾向);开源协议 GPL-3.0 vs MIT 待定 | 本文 |
-| **S1** | 选股入口 | MVP 先做**自选监控(A,⭐荐)** vs 直接上全市场筛选(B) | [analysis §2.2](analysis.md#22-两种选股入口app-里的功能形态) |
-| **S2** | 选股打分权重 | 上行40 / PE30 / 置信10 / 评级10 / 位置10,是否调 | [analysis §2.1](analysis.md#21-选股流水线四步漏斗) |
-| **S3** | 硬过滤门槛 | 市值≥$10B / 价≥$5 / 量≥500K;要不要行业白/黑名单 | [analysis §2.1](analysis.md#21-选股流水线四步漏斗) |
-| **S4** | 防追高硬规则 | 现价>52周高95% 是否直接标红/降权 | [analysis §2](analysis.md#2-选股流水线与估值打分) |
-| **Q1** | AI 层架构 | **精简多智能体 3+1(⭐荐)** vs 单次AI解读(1 agent) | [analysis §3.3](analysis.md#33--精简多智能体-31-方案) |
-| **Q3** | 定时分析+持仓追踪 | 是否把现有每日 WeChat 监控整合进 App | [analysis §3](analysis.md#3-github-对标与多智能体方案) |
-| **Q4** | 省钱模式 | AI 页"只跑 1 个 agent"省 token 开关 | [analysis §3.3](analysis.md#33--精简多智能体-31-方案) |
-| **M1** | MVP 是否带 ML | 带 vs ML 放二期(先做好估值分析) | [analysis §4](analysis.md#4-ml-辅助信号lightgbm-涨跌方向) |
-| **M2** | ML 起步层 | T1时间序列(预测带) / **T2树模型LightGBM(⭐荐,涨跌概率)** | [analysis §4.1](analysis.md#41-分层与选型) |
-| **M3** | ML 预测窗口 | 未来 5天 / 20天 / 都给 | [analysis §4](analysis.md#4-ml-辅助信号lightgbm-涨跌方向) |
-| **U1** | 底部 4 Tab 结构 | 监控/筛选/AI/我的,认可还是想更少 | [design §2](design.md#2-信息架构页面地图) |
-| **U3** | 行为对冲默认开 | 追高预警/小亏不焦虑/卖出信号自检,默认开启 | [design §8](design.md#8--行为对冲设计本-app-的灵魂专为你) |
-| **U4** | 详情页折叠 | 估值/支撑压力默认展开,其余收起 | [design §4.2](design.md#42-个股详情页二级信息最密) |
-| **U5** | AI 页展示方式 | 逐 agent 流式(更可信稍慢) vs 只出最终决策卡 | [design §4.4](design.md#44--ai-解读页多智能体) |
-| **V1** | 可视化 MVP 范围 | P0 估值图(上行空间/区间/前瞻PE)+盈亏 + **实时多周期行情图(分时/日K/周K/月K)+ LightGBM 方向预测叠加**纳入 MVP | [design §6.2](design.md#62-核心可视化清单按优先级) |
+- Tencent is the primary source for live quotes and chart bars.
+- Sina is the fallback source for live quotes when Tencent fails.
+- Yahoo Finance `quoteSummary` is the direct source for target median price,
+  forward P/E, analyst coverage and rating, moving averages, and 52-week
+  fields. It is unofficial and may change without notice.
+- Azure OpenAI is called directly from Android only when the user has
+  configured BYOK credentials.
+- No project server mediates these dependencies.
 
-> **已在子文档中给出定位、默认采纳(如无异议即执行)**:ML 只做**辅助信号不单独下结论**、深度学习 T3 放二期、把"上行空间%/前瞻PE"作为 ML 特征(见 [analysis §4](analysis.md#4-ml-辅助信号lightgbm-涨跌方向));图表库 fl_chart 为主 + K线用 candlesticks/syncfusion(见 [design §6.1](design.md#61-flutter-端图表库选型))。
+<a id="3-decision-ledger-as-the-single-decision-source"></a>
+## 3. Decision ledger as the single decision source
 
----
+### 3.1 Locked decisions
 
-## 4. 关联文档索引
+| ID | Decision | Conclusion | See |
+|---|---|---|---|
+| A1 | Android stack | **Native Kotlin plus Jetpack Compose**, replacing the earlier cross-platform direction | §2.1 |
+| A2 | Android architecture | Material 3 + MVVM/UDF + Coroutines/Flow + Hilt + Retrofit/OkHttp + Room/DataStore + Keystore | §2.1 |
+| A3 | Build baseline | Gradle Wrapper 9.4.1, Android Gradle Plugin 9.2.0, JDK 17, compile/target SDK 36, and minimum SDK 26 | Repository build files |
+| B | Data approach | **Direct Android provider clients**: Tencent primary and Sina fallback for quotes/OHLCV; direct Yahoo Finance HTTP `quoteSummary` for valuation and analyst fields; Room caches all normalized snapshots | [`data-sources.md`](data-sources.md) |
+| B2 | Canonical symbol and time model | Use provider-specific symbol mapping at the edges; keep exchange-time-correct timestamps internally for DST, holidays, and bar boundaries; convert every displayed timestamp to the device local timezone | [`data-sources.md`](data-sources.md) |
+| B3 | Project-server boundary | No project server exists for the MVP or current architecture; runtime networking and processing stay local to Android | §2 |
+| Q1 | AI architecture | Streamlined **3 plus 1**: fundamentals, technicals, risk, arbiter | [`analysis.md` §3.1](analysis.md#31-streamlined-3-plus-1-flow) |
+| Q2 | AI integration | BYOK Azure OpenAI four-part configuration; prompts and outputs follow a shared contract; requests go directly from Android to Azure | [`ai-prompt.md`](ai-prompt.md) |
+| S1 | Screening scope | The MVP includes both watchlist monitoring and full screening across NASDAQ, NYSE, and NYSE American | [`analysis.md` §2.2](analysis.md#22-two-stock-selection-entry-points-as-product-behavior) |
+| S5 | Screening universe | NASDAQ, NYSE, and NYSE American operating-company securities. Include common stocks and ADRs only when required valuation fields are complete; exclude ETFs, funds, warrants, rights, units, and preferred shares | [`data-sources.md` §2.4](data-sources.md#24-us-exchange-screening-universe) |
+| M1 | ML in the MVP | **Yes, LightGBM**, but only as an auxiliary probability signal | [`analysis.md` §4](analysis.md#4-ml-support-signals-lightgbm-direction-models) |
+| M2 | Intraday prediction | Infer the probability of direction over the **next 30 minutes** after every completed local 5-minute bar; the model is trained offline and shipped for on-device inference | [`analysis.md` §4.3](analysis.md#43-live-inference-and-visualization-contract) |
+| M3 | Medium-horizon prediction | Infer the probability of direction over the **next 5 trading days** after each market close | [`analysis.md` §4.3](analysis.md#43-live-inference-and-visualization-contract) |
+| M4 | ML display policy | Show valid `30m` and `5d` predictions in real time without an accuracy threshold; always expose model version, freshness, walk-forward metrics, calibration metrics, and the disclaimer | [`analysis.md` §4.3](analysis.md#43-live-inference-and-visualization-contract) |
+| M5 | LightGBM runtime format | Train and export during development or release tooling, convert to ONNX `TreeEnsemble`, bundle a versioned ONNX model in the APK, and infer with ONNX Runtime Android; no runtime training | [`analysis.md` §4.3](analysis.md#43-live-inference-and-visualization-contract) |
+| M6 | Signed local model import | Allow signed ONNX model packages to be imported locally after installation; verify signature, checksum, feature schema, horizons, and compatibility before atomic activation, with rollback to the last valid model | [`analysis.md` §4.3](analysis.md#43-live-inference-and-visualization-contract) |
+| U1 | Navigation structure | Four active bottom tabs: Watchlist / Screening / AI / Me | [`design.md` §2](design.md#2-information-architecture-and-page-map) |
+| U2 | Valuation color semantics | Red = expensive or chasing highs, green = valuation upside; always pair color with icon and text | [MASTER §2](design-system/ai-stock-analyst/MASTER.md#2-semantic-layer-reversed-valuation-colors-the-projects-core) |
+| U6 | Screening MVP behavior | Screening is a full, visible MVP tab with working NASDAQ, NYSE, and NYSE American refresh, progress, and results; it is not hidden or deferred | [`design.md` §4.3](design.md#43-screening-page) |
+| V1 | Market chart | TradingView-inspired reference for interaction density and information hierarchy; never copy proprietary code, assets, or branding | [`design.md` §6](design.md#6-chart-design-and-visualization-checklist) |
+| V2 | Chart implementation | Vico Compose base layers plus Compose overlay and custom drawing; do not integrate the proprietary TradingView Charting Library | [`design.md` §6.1](design.md#61-kotlin-compose-chart-technology-choice) |
+| V3 | Exact chart timeframes and layers | Support minute/hour/day/month families with `1m / 5m / 15m / 30m / 1h / 4h / 1D / 1M`; show candlesticks, volume histogram, and a labeled LightGBM probability line; do not promise weekly in the MVP | [`design.md` §6](design.md#6-chart-design-and-visualization-checklist) |
+| I1 | Support and resistance | Four methods: pivot points, swing highs and lows, Fibonacci, and moving-average or 52-week positioning | [`analysis.md` §1.2](analysis.md#12-support-and-resistance-levels-four-required-methods) |
+| I2 | Support/resistance presentation | "Distance to nearest support/resistance" sits beside upside and forward P/E | [`design.md` §4.2](design.md#42-stock-detail-page-secondary-level-highest-information-density) |
+| I3 | Resonance | Any level hit by at least two methods is bolded and tagged with reliability | [`analysis.md` §1.2](analysis.md#12-support-and-resistance-levels-four-required-methods) |
+| I4 | Technical MVP scope | MA50/200, RSI(14), and 52-week positioning; MACD, Bollinger Bands, and ATR later | [`analysis.md` §1.3](analysis.md#13-technicals-as-a-supporting-role) |
+| P1 | Product account scope | Watchlist-only. Explicitly exclude holdings, lots, cost basis, staged buys, partial sells, trade execution, and brokerage functionality | [`design.md` §4.1](design.md#41-watchlist-page-home-page-and-daily-cockpit) |
+| Q5 | Forecast and analyst presentation | AI provides evidence-based outlook summaries for the existing `30m` and `5d` horizons; analyst low/median/high target prices and the AI summary are displayed in cards outside the market chart, never drawn as chart price lines | [`ai-prompt.md`](ai-prompt.md) |
 
-| 文档 | 内容 | 状态 |
-|------|------|------|
-| [`data-sources.md`](data-sources.md) | 行情数据源调研(2026 实测横评) | ✅ 调研完成 |
-| [`analysis.md`](analysis.md) | 分析与 AI 方法(量化指标/支撑压力/选股流水线/多智能体/ML) | ✅ 草案+实测,部分已定 |
-| [`design.md`](design.md) | 产品设计(页面架构/用户旅程/行为对冲/图表清单) | ✅ 草案 |
-| [`design-system/ai-stock-analyst/MASTER.md`](design-system/ai-stock-analyst/MASTER.md) | 设计系统底座(配色/字体/间距/触控/图表规格) | ✅ 已定 |
-| `ai-prompt.md` | AI prompt 模板(内嵌估值纪律) | ⏳ 待写 |
+### 3.2 Open decisions
 
----
+| ID | Decision point | Current recommendation | See |
+|---|---|---|---|
+| C | Quant factor expansion | Do not add money flow, sentiment, or sector comparison in the MVP | [`analysis.md` §1](analysis.md#1-valuation-metrics-support-and-resistance-and-technicals) |
+| D | AI vendor compatibility | MVP supports Azure OpenAI only; standard OpenAI and DeepSeek come later | This document |
+| E | Open-source license | Choose Apache-2.0 or MIT before publishing code | This document |
+| S2 | Screening weights | Upside 40 / P/E 30 / confidence 10 / rating 10 / positioning 10 | [`analysis.md` §2.1](analysis.md#21-stock-selection-pipeline-four-stage-funnel) |
+| S3 | Hard filters | Market cap >= $10B, price >= $5, average daily volume >= 500K | [`analysis.md` §2.1](analysis.md#21-stock-selection-pipeline-four-stage-funnel) |
+| S4 | Anti-chasing rule | When the current price is above 95% of the 52-week high, down-rank it and warn | [`design.md` §8](design.md#8-behavioral-counterweights) |
+| Q3 | Scheduled watchlist analysis | Integrate in phase two | This document |
+| Q4 | Cost-saving mode | Keep a single-agent toggle | [`design.md` §4.4](design.md#44-ai-interpretation-page-multi-agent) |
+| U3 | Behavioral reminders | On by default, user can disable | [`design.md` §8](design.md#8-behavioral-counterweights) |
+| U4 | Detail-page folding | Valuation, support/resistance, and market chart expanded by default | [`design.md` §4.2](design.md#42-stock-detail-page-secondary-level-highest-information-density) |
+| U5 | AI presentation | Stream each agent, then show the final arbiter card | [`design.md` §4.4](design.md#44-ai-interpretation-page-multi-agent) |
 
-## 5. 推进顺序
+## 4. Key data and timing
 
-1. 定 §3 的 **B 数据源**(其它都依赖它,技术栈 A 已定)
-2. 写死 demo:脚本拉 1 只股票全字段 → 验证数据通路
-3. 接 Azure OpenAI,跑通"数据 → AI 报告"
-4. 包 UI(Flutter 4+1 页 + MASTER 设计 token)
-5. 打包 APK / 部署薄后端
+| Data | Source | Freshness | App expression |
+|---|---|---|---|
+| Current price and live quote snapshot | Tencent primary, Sina fallback | 30-60 second polling | Show quote timestamp |
+| 1-minute bars and local completed 5-minute bars | Tencent chart endpoints plus local Room aggregation | Every completed bar | Drive charts, indicators, screening signals, and `30m` inference |
+| 15-minute, 30-minute, 1-hour, 4-hour, daily, and monthly candles | Tencent chart endpoints, local aggregation, and Room cache | Refresh after vendor publication | Multi-timeframe chart history |
+| Analyst low/median/high targets, forward P/E, rating, analyst count, averages, and 52-week fields | Direct Yahoo Finance HTTP `quoteSummary`, cached locally in Room | Daily cache cadence | Show analyst range and AI summary outside the chart; degrade only valuation-dependent features on failure |
+| Screening refresh state | WorkManager plus Room | Background batched refreshes | Show progress, resumable status, and cache freshness |
+| 30-minute direction probability | ONNX Runtime Android intraday model | After each completed local 5-minute bar | Show horizon, probability, model version, and freshness |
+| 5-day direction probability | ONNX Runtime Android daily model | After each market close | Display separately from intraday probability |
+| AI report | Azure OpenAI direct from Android | User-triggered | Show input snapshot time |
+
+All calculations use exchange time internally. The UI converts user-visible
+timestamps to the Android device's local timezone at render time.
+
+The local prediction snapshot must retain `asOf`, `horizon`, `probabilityUp`,
+`confidence`, `modelVersion`, `featureWindow`, `dataFreshness`, and backtest
+metrics. For the full contract, see
+[`analysis.md` §4.3](analysis.md#43-live-inference-and-visualization-contract).
+
+## 5. Repository and document index
+
+| Document | Content | Status |
+|---|---|---|
+| [`../README.md`](../README.md) | English product overview and documentation navigation | Maintained |
+| [`../README.zh-CN.md`](../README.zh-CN.md) | Chinese product overview and documentation navigation | Maintained |
+| [`../CLAUDE.md`](../CLAUDE.md) | Agent harness guide, repository routing, and workflow rules | Maintained |
+| [`data-sources.md`](data-sources.md) | Selected providers, endpoint contracts, freshness, and fallback | Maintained |
+| [`analysis.md`](analysis.md) | Formulas, screening, 3+1 AI interpretation, and LightGBM contract | Maintained |
+| [`design.md`](design.md) | Pages, interactions, chart placement, and behavioral UX rules | Maintained |
+| [`design-system/ai-stock-analyst/MASTER.md`](design-system/ai-stock-analyst/MASTER.md) | Exact visual tokens, accessibility, and chart semantics | Maintained |
+| [`ai-prompt.md`](ai-prompt.md) | 3+1 agent prompts and structured output contract | Maintained |
+| [`../app/`](../app/) | Android application, four-tab Compose shell, and Hilt graph | Implemented foundation |
+| [`../core/data/`](../core/data/) | Local-first repository and stale-cache refresh behavior | Implemented quote/valuation slice |
+| [`../core/database/`](../core/database/) | Room cache, DAOs, schema, and model mappings | Implemented quote/valuation slice |
+| [`../core/model/`](../core/model/) | Canonical market-domain models | Implemented foundation |
+| [`../core/domain/`](../core/domain/) | Deterministic valuation and time calculations | Implemented foundation |
+| [`../core/designsystem/`](../core/designsystem/) | Compose design tokens and theme | Implemented foundation |
+| [`../core/network/`](../core/network/) | Direct quote and valuation provider clients | Implemented quote/valuation slice |
+
+## 6. Delivery order
+
+Steps 1 and 2 are implemented for quote and valuation snapshots. Historical
+bar ingestion and completed 5-minute aggregation begin with step 3.
+
+1. Create the Kotlin/Compose Android skeleton with the locked local-only
+   module boundaries.
+2. Bring up Tencent and Sina quote clients, the Yahoo Finance HTTP client,
+   Room caches, and the canonical exchange-time model.
+3. Implement deterministic indicators, support/resistance, and the
+   TradingView-inspired detail-page chart with
+   `1m / 5m / 15m / 30m / 1h / 4h / 1D / 1M`
+   shortcuts, candlesticks, volume, and probability-line placement.
+4. Implement the full three-exchange screening pipeline with WorkManager
+   batching, resumable progress, pagination, and freshness reporting.
+5. Package versioned ONNX LightGBM models, run local inference for both
+   horizons, and implement signed model import with validation and rollback.
+6. Integrate the Azure OpenAI 3+1 flow and the structured arbiter card.
+7. Finish security, accessibility, offline/error states, APK signing, and
+   release work.

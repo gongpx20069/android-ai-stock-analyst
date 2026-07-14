@@ -1,31 +1,58 @@
-# AI Stock Analyst 📈🤖
+# AI Stock Analyst
 
-一个**自用、免费、BYOK(填自己的 AI key)** 的美股分析工具:行情 + 基础量化指标 + AI 解读,落地为**安卓 App**。
+Looking for Chinese? See [README.zh-CN.md](README.zh-CN.md).
 
-> 软件本身免费开源,AI 能力由用户自己的 Azure OpenAI / OpenAI key 驱动(只花自己 token 的钱)。
+AI Stock Analyst is a free, serverless, local-only runtime, BYOK Android app
+for US-stock research. No project server is required. It combines live quotes,
+valuation and technical indicators, on-device LightGBM probability signals,
+and Azure OpenAI interpretation without presenting itself as a buy/sell
+recommender.
 
-## 这个项目要解决什么
+## Why it is different
 
-市面上"免费 + 安卓 APK + 带 AI + 能填自己 key"的成熟美股分析 App 几乎不存在(成熟的如 go-stock 只有桌面版)。所以自己写一个,把**我自己的估值纪律**(看上行空间 + 低 PE、在跌≠便宜)直接编码进去,而不是用通用的"涨跌预测"。
+- **Valuation first:** judge a stock by median analyst target upside and
+  forward P/E, not by whether its price recently fell.
+- **Native Android:** the APK will be built with Kotlin and Jetpack Compose.
+- **TradingView-inspired charting:** candlesticks, volume histogram,
+  pan/zoom, crosshair, minute/hour/day/month views, and a clearly labeled
+  LightGBM probability line. TradingView code, branding, and proprietary
+  assets are not bundled.
+- **Local-only runtime:** quote fetching, caching, screening, indicator
+  calculation, and ML inference run inside the Android app.
+- **BYOK Azure OpenAI:** users provide their own Endpoint, Key, Deployment,
+  and API Version. The key is encrypted on-device and sent only to the
+  configured Azure endpoint.
+- **Watchlist-only:** the product supports watchlists and research suggestions,
+  not holdings, portfolio lots, cost basis, staged buys, partial sells, trade
+  execution, or brokerage features.
+- **Honest ML:** LightGBM outputs calibrated probabilities and uncertainty. It
+  does not create deterministic future candles, future price paths, or
+  investment instructions.
 
-## 核心原则
+## Status
 
-- **数据驱动、非荐股**:输出客观数据 + AI 解读,不做买卖预测。
-- **BYOK**:不内置付费后端,用户填自己的 Azure OpenAI key,数据与密钥可控。
-- **隐私优先**:行情数据本地处理,key 存在本地,不上传第三方服务器。
-- **先 MVP,再迭代**:第一版只做"单只股票分析",跑通再扩展。
+Implementation has started. The repository now contains the native
+Kotlin/Compose project, four-tab application shell, shared design system,
+market-domain models, Tencent quote parsing with Sina fallback, an isolated
+Yahoo Finance cookie/crumb valuation client, Room-backed quote and valuation caches, and a
+Hilt-wired repository with explicit stale-cache results. Chart bars,
+indicators, screening, ONNX inference, and Azure integration are the next
+delivery slices.
 
-## 状态
+## Documentation
 
-🚧 设计阶段(尚无代码)— 所有决策(已定/待拍板)集中在 [`docs/architecture.md`](docs/architecture.md) 决策台账
+| Document | Purpose |
+|---|---|
+| [Chinese user README](README.zh-CN.md) | Chinese-language product overview and navigation |
+| [Architecture](docs/architecture.md) | System boundaries, locked decisions, open questions, and delivery order |
+| [Data sources](docs/data-sources.md) | Direct Android provider clients, endpoint contracts, freshness, and fallback |
+| [Analysis and AI](docs/analysis.md) | Valuation, screening, 3+1 interpretation, and local LightGBM |
+| [Product design](docs/design.md) | Screens, journeys, TradingView-inspired chart behavior, and state design |
+| [Design system](docs/design-system/ai-stock-analyst/MASTER.md) | Visual tokens, accessibility, colors, typography, and chart semantics |
+| [AI prompt contract](docs/ai-prompt.md) | Agent responsibilities, prompt invariants, and structured output schema |
 
-## 文档
+## Disclaimer
 
-> **单一出处**:全项目所有决策统一登记在 `architecture.md` §3 决策台账,子文档不再各自散落决策清单。看项目从 `architecture.md` 入手。
-
-- [`docs/architecture.md`](docs/architecture.md) — **架构中枢 + 决策台账**(核心矛盾 + 全项目已定/待定决策 + 文档索引,从这里开始)
-- [`docs/data-sources.md`](docs/data-sources.md) — 行情数据源调研(2026 实测横评)
-- [`docs/analysis.md`](docs/analysis.md) — 分析与 AI 方法(量化指标/支撑压力4算法/技术面 + 选股流水线 + GitHub对标与多智能体 + ML辅助信号)
-- [`docs/design.md`](docs/design.md) — 产品设计(页面架构 + 用户旅程 + 功能↔UX映射 + 行为对冲 + 图表清单)
-- [`docs/design-system/ai-stock-analyst/MASTER.md`](docs/design-system/ai-stock-analyst/MASTER.md) — 设计系统底座(配色/字体/间距/触控/图表规格,ui-ux-craft-kit 落地)
-- 后续:`docs/ai-prompt.md`(AI prompt 模板,随讨论补充)
+This project is for personal research and education. Model outputs, analyst
+targets, and AI summaries can be delayed, incomplete, or wrong and are not
+investment advice.

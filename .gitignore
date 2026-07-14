@@ -1,21 +1,40 @@
-# deps
-node_modules/
-.venv/
-__pycache__/
-*.pyc
-
-# secrets (BYOK keys 绝不入库)
-.env
-*.key
+# Android / Gradle
+.gradle/
+.kotlin/
+**/build/
 local.properties
-
-# build
-build/
-dist/
+.externalNativeBuild/
+.cxx/
+captures/
 *.apk
 *.aab
 
-# os/editor
-.DS_Store
+# Signing and BYOK secrets
+.env
+.env.*
+!.env.example
+*.key
+*.jks
+*.keystore
+keystore.properties
+
+# Local model-training / release-tooling artifacts
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Model-training artifacts
+*.lgb
+*.pkl
+*.joblib
+# Bundled .onnx runtime assets are source files and must stay committed.
+
+# IDE / OS
 .idea/
 .vscode/
+*.iml
+.DS_Store
+Thumbs.db

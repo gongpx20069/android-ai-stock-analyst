@@ -1,295 +1,362 @@
-# 产品设计:页面 / 旅程 / 图表
+# Product Design: Pages, Journeys, and Charts
 
-> 本文回答:App 长什么样、用户怎么用、每一步交互怎么设计、每张图放哪。
-> **核心立场**:UX 不只是"好看",而是**用交互服务你的估值纪律、对冲你的冲动**——把"看上行空间、防追高、别因小亏焦虑"做进界面。
-> **视觉/规格底座**:所有颜色/字体/间距/触控/图表规格统一落在 [MASTER](design-system/ai-stock-analyst/MASTER.md);本文只讲**页面、交互与图表落点**,遇到具体数值以 MASTER 为准。
-
----
-
-## 1. 设计总原则(立场先行)
-
-1. **估值优先于价格**:每个页面第一眼看到的是「上行空间% / 距支撑压力%」,而不是今天涨跌了几个点;价格涨跌**弱化**呈现(灰 `#94A3B8` + 12–14sp,上行空间%/支撑压力% 用 32sp 大字)。**估值类图是主角,K线是配角。**
-2. **对冲冲动,而非煽动**(⭐针对你):你有"在跌=便宜就想买""小亏就焦虑"的习惯,UX 要在这些时刻**插入一句冷静提示**,而不是放大情绪(详见 §8)。
-3. **一眼可决策**:手机小屏,每个卡片/每张图都直指"该持/该减/该观察",不堆原始数据让你自己算。
-4. **可解释、带免责**:AI/ML 结论旁永远有"为什么"和"非投资建议",杜绝假精确。
-5. **中文、低门槛**:你自评"投资初级",术语旁配一句人话解释(如"前瞻PE=按明年预期利润算的市盈率,越低越便宜")。
-6. **配色对齐估值,不对齐价格**:🟢绿=有上行空间、🔴红=追高/上行转负、🟡黄=接近目标价、🟣紫=AI/ML(反直觉语义与色值全见 [MASTER §2](design-system/ai-stock-analyst/MASTER.md))。若"跌了显示绿色"会强化"跌=便宜=该买"的错误直觉;红绿**必配 ↑↓ 图标+文字标签**(可访问性)。触控/字体守 MASTER 铁律:可点元素 ≥48dp、正文/输入 ≥16sp、数字用 Fira Code 等宽。
+> This document owns page structure, interaction flows, chart placement, and
+> behavioral UX requirements. Exact visual tokens, accessibility values, and
+> chart styling live only in
+> [MASTER](design-system/ai-stock-analyst/MASTER.md). Prompt schemas and the
+> canonical AI disclaimer live only in [`ai-prompt.md`](ai-prompt.md).
 
 ---
 
-## 2. 信息架构(页面地图)
+## 1. Design principles first
 
-底部 4 个 Tab,深度不超过 2 层,符合"一眼可读":
+1. **Valuation before price:** the first visible answer should be upside and
+   room to support or resistance, not short-term price excitement.
+2. **Counter impulse instead of amplifying it:** the UX should add friction at
+   chasing and panic moments rather than reward them.
+3. **Judgment at a glance:** each card and chart should answer one decision
+   question clearly on a small screen.
+4. **Explainable AI and ML:** every AI or ML surface must show why it exists and
+   must use the canonical disclaimer contract from
+   [`ai-prompt.md`](ai-prompt.md).
+5. **Plain-language support:** technical terms should include short help text so
+   the app remains usable without outside research.
+6. **Visual rules defer to MASTER:** valuation color semantics, typography,
+   spacing, touch targets, motion, and chart styling are owned by
+   [MASTER](design-system/ai-stock-analyst/MASTER.md).
 
-```
+---
+
+<a id="2-information-architecture-and-page-map"></a>
+## 2. Information architecture and page map
+
+The information architecture is four active bottom-tab destinations in the MVP.
+
+```text
 ┌─────────────────────────────────────────────┐
 │                                             │
-│              (当前页面内容)                  │
+│              Current page content           │
 │                                             │
-├──────┬──────┬──────┬──────────────┤
-│ 📊监控 │ 🔍筛选 │ 🤖AI │ ⚙️我的       │
-└──────┴──────┴──────┴──────────────┘
+├──────────┬────────────┬──────┬──────────────┤
+│ Watchlist │ Screening │ AI   │ Me           │
+└──────────┴────────────┴──────┴──────────────┘
 ```
 
-| Tab | 页面 | 干什么 | 频率 |
-|-----|------|--------|------|
-| **📊 监控** | 自选监控页(首页) | 看持仓/自选的估值健康度 | 高(每天开) |
-| **🔍 筛选** | 全市场筛选页 | 按纪律从全市场挑低估票 | 低 |
-| **🤖 AI** | AI 解读页 | 多智能体深度分析单只票 | 中 |
-| **⚙️ 我的** | 设置页 | 填 Azure key、管自选、纪律开关 | 极低 |
+| Tab | Page | Purpose | Frequency |
+|---|---|---|---|
+| **Watchlist** | Watchlist home page | Check valuation health for tracked names | High |
+| **Screening** | Screening destination | Screen NASDAQ, NYSE, and NYSE American with local refresh, progress, and results | Medium |
+| **AI** | AI interpretation page | Run deeper 3+1 interpretation for one stock | Medium |
+| **Me** | Settings page | Configure BYOK Azure settings, watchlists, and preference toggles | Low |
 
-> 二级页面只有一个:**个股详情页**(从任意列表点进去)。整个 App 就 4+1 个核心页,克制。
+There is one second-level page: the **stock detail page**, entered from any
+list.
 
 ---
 
-## 3. 功能 ↔ UX 映射表(完整性校验 —— 无功能遗漏)
+## 3. Feature to UX mapping table and completeness check
 
-> 目标:docs/ 下已定的**每一个功能**,都要在 UX 里有承载它的页面/交互/组件,不漏。规格数值统一见 MASTER。
-
-| # | 功能(来自 docs) | 承载页面 | 承载组件/交互 | 视觉/规格(MASTER) |
-|---|------------------|----------|---------------|---------------------|
-| 1 | **行情数据**(现价/涨跌,腾讯/新浪源) | §4.1 监控页、§4.2 详情页① | 卡片现价 + **弱化**的今日涨跌小灰字;详情页顶栏现价 | 数字用 Fira Code 等宽;涨跌用 `--muted-fg #94A3B8` 弱化 |
-| 2 | **估值快照**(中位目标价/上行空间%/前瞻PE/评级/分析师数) | §4.1 监控页、§4.2 详情页①(默认展开) | 上行空间%**大字**主视觉 + 估值字段行 + 上行空间条 | 上行空间字号 32sp;绿=有空间/红=偏贵(MASTER §2) |
-| 3 | **支撑压力(4算法)**(pivot/swing/Fib/MA 共振) | §4.2 详情页②(默认展开) | "距支撑 -X% / 距压力 +Y%" 数字卡 + 支撑压力位图(共振位加粗) | Bullet/区间图;方向线走中性色不抢估值红绿 |
-| 4 | **技术面 MA/RSI/52周位置** | §4.2 详情页③(收起) | 折叠区:MA50/200、RSI、52周位置条 | 折叠降载;52周位置用于流程B追高预警 |
-| 5 | **选股漏斗**(市值/价格/量/行业 + 估值打分) | §4.3 筛选页 | 快捷模板 chips + 可展开高级滑块 + 结果按上行空间%降序 | 横向 Bar 按 MASTER §2 语义着色;每行一键加自选 |
-| 6 | **多智能体 AI 解读(3+1)**(基本面/技术面/风险反方 + 裁决) | §4.4 AI 页(从详情页④进入) | **逐 agent 流式**出结论 + 底部裁决卡 + 省钱模式开关 | AI 用 `--accent 紫 #8B5CF6`;裁决卡带"非投资建议" |
-| 7 | **ML 涨跌概率**(LightGBM,辅助信号) | §4.2 详情页⑤(收起,带免责) | 概率仪表 Gauge + "仅参考非建议"标注 | 中性轨道 + 紫/金弧,**不用**估值红绿 |
-| 8 | **BYOK Azure 设置**(Endpoint/Key/Deployment/API-Version) | §4.5 我的页 | 四件套表单 + "测试连接" + "只存本机"声明 | onBlur 实时校验;清 Key 二次确认;numeric 键盘 |
-| 9 | **实时行情图(多周期+预测叠加)**(MVP) | §4.2 详情页⑥(展开) | 周期 Tab(分时/日K/周K/月K)折线+Candlestick,右缘叠 LightGBM 方向预测 | 中性单色区分涨跌,红绿留给估值;预测走中性/紫金 |
-| 10 | **行为对冲**(追高预警/小亏不焦虑/卖出信号自检) | §4.1、§4.2、§4.4、§8 | 情境化提示卡 + 纪律开关 | 见 §8;温和可关,默认开 |
-| 11 | **自选/持仓管理** | §4.1 监控页、§4.5 我的页 | 组合健康度总览 + 增删自选(删除二次确认) | 空态引导用 GOOGL/AMZN/NVDA 示例 |
-
-> **校验结论**:docs 已定的 8 项核心功能(行情、估值快照、支撑压力4算法、技术面、选股漏斗、AI 3+1、ML 概率、BYOK Azure)+ 实时行情图/自选/对冲,全部有 UX 承载,无遗漏。
+| # | Feature from docs | Hosting page | Hosting component or interaction |
+|---|---|---|---|
+| 1 | Market data | Watchlist and detail | Current price row, quote timestamp, and live chart entry |
+| 2 | Valuation snapshot | Watchlist and detail | Upside summary, forward P/E, rating, and analyst count |
+| 3 | Support and resistance | Detail | Numeric cards plus level chart with resonance emphasis |
+| 4 | Technicals | Detail | Folded block for MA, RSI, and 52-week position |
+| 5 | Screening funnel | Screening | Quick templates, optional controls, background refresh state, and ranked results |
+| 6 | 3+1 multi-agent AI | AI page | Streaming agent cards plus a final arbiter card |
+| 7 | ML direction probability | Detail | Collapsed ML reference block and chart probability-line placement |
+| 8 | BYOK Azure settings | Me | Four-field form, test action, and local-only storage messaging |
+| 9 | Live market chart | Detail | TradingView-inspired chart, gesture model, and probability-line placement |
+| 10 | Behavioral counterweights | Watchlist, detail, AI, and settings | Context-specific reminders and a discipline toggle |
+| 11 | Watchlist management | Watchlist and Me | Add/remove actions, list state, and valuation-health summary |
 
 ---
 
-## 4. 核心页面设计(含图表落点)
+## 4. Core page design and chart placement
 
-> 每张图的规格/配色/A11y 规则见 [MASTER §5](design-system/ai-stock-analyst/MASTER.md);图表完整清单见 §6,这里说明"哪个页面放哪些图"。
+### 4.1 Watchlist page home page and daily cockpit
 
-### 4.1 📊 监控页(首页 —— 你每天看的)
+**Top-to-bottom layout**
 
-**布局(从上到下)**:
+```text
+Valuation health summary
+Tracked stock cards
+  ├─ upside and valuation row
+  ├─ distance to support / resistance
+  └─ de-emphasized daily change
 ```
-┌─────────────────────────────────┐
-│ 组合健康度  ●●●○○  "2只有空间,1只接近目标" │ ← 一句话总览,不是冰冷数字
-├─────────────────────────────────┤
-│ NVDA  现价198  浮盈 +12%  🟢         │
-│ ▸ 上行空间 +48%   前瞻PE 32   评级 买入  │ ← 估值在前
-│ ▸ 距支撑 -2%  距压力 +9%             │ ← 支撑压力醒目
-│ ▸ 小字:今日 +1.2%(弱化,灰色)        │ ← 价格涨跌弱化
-├─────────────────────────────────┤
-│ GOOGL ...                          │
-│ AMZN  ...                          │
-└─────────────────────────────────┘
+
+- Each card is one decision unit.
+- Valuation information sits above daily price change.
+- Tapping a card opens the stock detail page.
+- A short valuation-health sentence should summarize whether tracked names still
+  have room or need caution.
+- Charts on this page: upside bars and concise valuation-position summaries.
+
+<a id="42-stock-detail-page-secondary-level-highest-information-density"></a>
+### 4.2 Stock detail page secondary level highest information density
+
+Use folded blocks so the most important facts appear first:
+
+```text
+1. Valuation snapshot, expanded by default
+2. Support and resistance, expanded by default
+3. Technicals, collapsed
+4. AI interpretation entry
+5. ML reference, collapsed
+6. Live market chart, expanded
 ```
-- **每张卡 = 一个决策单元**:绿色边=有上行空间健康,黄=接近目标价该留意,红=上行空间转负/追高区。
-- **估值字段在上,价格涨跌在下且灰色**——刻意不让"今天红了"主导你的注意力。
-- 点卡片 → 个股详情页。顶部"组合健康度"用一句话(非数字):"整体仓位健康,无追高风险"。
-- **图表**:① 上行空间条形图(多只横排) + ④ 盈亏概览(见 §6)。
 
-### 4.2 个股详情页(二级,信息最密)
+Block details:
 
-分**折叠区块**,默认只展开你最关心的估值区,其余收起防止信息过载:
+1. **Valuation snapshot**
+   - current price
+   - analyst low / median / high targets
+   - upside percent
+   - forward P/E
+   - rating
+   - analyst count
+2. **Support and resistance**
+   - distance to nearest support
+   - distance to nearest resistance
+   - level chart with resonance emphasis
+3. **Technicals**
+   - MA50 / MA200
+   - RSI
+   - 52-week position
+4. **AI interpretation entry**
+   - opens the AI page using the user's Azure setup
+5. **ML reference**
+   - probability, horizon, version, freshness, and clear subordinate labeling
+   - contract lives in [`analysis.md` §4.3](analysis.md#43-live-inference-and-visualization-contract)
+6. **Live market chart**
+   - chart placement is fixed here
+   - shortcuts are `1m / 5m / 15m / 30m / 1h / 4h / 1D / 1M`
+   - minute, hour, day, and month views must remain exchange-time correct while
+     displayed timestamps follow the device local timezone
+   - the chart must show candlesticks, volume histogram, and a LightGBM
+     direction-probability line with its own labeled scale or sub-panel
 
+Each block should start with a short plain-language summary. Charts on this
+page include the current-price vs target view, support/resistance level chart,
+optional rating distribution, live market chart, and ML probability view.
+
+Below the market chart, render two non-chart surfaces:
+
+- **Analyst range card:** low, median, and high analyst targets, analyst count,
+  freshness, and current-price distance to the median.
+- **AI forecast summary card:** separate `30m` and `5d` outlook summaries,
+  evidence, confidence, watch conditions, and disclaimer.
+
+Neither surface may draw analyst targets or AI-generated statements as future
+price lines on the chart.
+
+### 4.3 Screening page
+
+```text
+Quick templates
+Optional advanced filters
+Background refresh status and progress
+Ranked results list
 ```
-① 估值快照(默认展开)⭐
-   现价 / 中位目标价 / 上行空间%(大字突出)/ 前瞻PE / 评级 / 分析师数
-   └─ 上行空间条形图
 
-② 支撑压力(默认展开)⭐
-   "距最近支撑 -2% | 距最近压力 +9%"(数字卡)
-   └─ 支撑压力位图(共振位加粗)
+- Quick templates reduce setup friction.
+- Default sorting is upside percent, not raw momentum.
+- Each result supports one-tap add to watchlist.
+- Screening is fully functional in the MVP.
+- Show local background-refresh progress, cache freshness, resumable state, and
+  last successful update time.
+- Results should support pagination so users can inspect early pages while later
+  pages continue to load.
+- Screening logic lives in
+  [`analysis.md` §2](analysis.md#2-stock-selection-pipeline-and-valuation-scoring).
 
-③ 技术面(收起)  MA50/200、RSI、52周位置
+<a id="44-ai-interpretation-page-multi-agent"></a>
+### 4.4 AI interpretation page multi-agent
 
-④ AI 解读(按钮)  "🤖 用我的 Azure 深度分析" → 跳 AI 页
+This page implements the 3+1 flow defined in
+[`analysis.md` §3.1](analysis.md#31-streamlined-3-plus-1-flow). The goal is to
+show the reasoning process rather than only the final answer.
 
-⑤ ML 参考(收起,带免责)  涨跌概率仪表 + "仅参考非建议"
+```text
+Analysing SYMBOL...
+  Fundamental agent -> stance and confidence
+  Technical agent   -> stance and confidence
+  Risk agent        -> stance and confidence
 
-⑥ 实时行情图(展开)⭐ 分时/日K/周K/月K 周期切换 + LightGBM 方向预测叠加
+Arbiter card
+  Summary
+  Confidence
+  Valuation state
+  30m outlook
+  5d outlook
+  Key evidence
+  Risk flags
+  Watch conditions
+  Freshness warnings
+  Canonical disclaimer
 ```
-- **折叠**是关键交互:你是初级用户,一次只看一块,避免被一屏几十个指标吓到。
-- 每块顶部一句**人话结论**:估值区写"现价离分析师目标价还有48%空间,前瞻PE 32 在科技股里中等"。
-- **图表**:② 区间点图 + ②b 支撑压力位图(共振位加粗,数据来自 [`analysis.md` §1.2](analysis.md#12-支撑压力位必做4-种算法)) + ⑤ 评级分布 + ⑥ 实时多周期行情图(分时/日K/周K/月K + 右缘 LightGBM 预测叠加,MVP) + ⑦ RSI/52周位置仪表 + ⑤ ML 概率仪表(见 [`analysis.md` §4.3](analysis.md#43-结果可视化与产品红线))。
 
-### 4.3 🔍 筛选页
+- Stream each agent as it completes.
+- A cost-saving mode may switch to a simpler pass if open decision `Q4`
+  remains enabled.
+- The final arbiter card stays fixed at the bottom.
+- `watchConditions` may include non-transactional research suggestions such as
+  monitor, caution, compare, or wait for fresher data, but never order
+  placement or trading controls.
+- Field names and validation rules come from [`ai-prompt.md`](ai-prompt.md).
+- The analyst target-range card and final AI summary remain outside the market
+  chart, even when the AI page is opened from chart context.
 
-```
-┌─────────────────────────────────┐
-│ 快捷模板:[低估科技] [高上行空间] [低PE] [自定义] │ ← 一键模板,不用自己配
-├─────────────────────────────────┤
-│ (可选)展开高级:市值/价格/成交量/行业 滑块      │
-├─────────────────────────────────┤
-│ 结果(按上行空间%排序):                       │
-│  1. XXXX  上行+52%  PE18  ⭐                  │
-│  2. ...                                      │
-└─────────────────────────────────┘
-```
-- **快捷模板**降低门槛:初级用户点"低估科技"就出结果,不必懂筛选参数。
-- 结果**默认按上行空间%排序**(贯彻纪律),不按涨幅。每行可一键加入自选。
-- 筛选逻辑见 [`analysis.md` §2](analysis.md#2-选股流水线与估值打分)。**图表**:③ 前瞻PE对比柱状 + ① 上行空间排序条形(见 §6)。
+### 4.5 Me settings page
 
-### 4.4 🤖 AI 解读页(多智能体)
-
-对标 [`analysis.md` §3.3](analysis.md#33--精简多智能体-31-方案) 的 3+1 精简多智能体,**交互上要让你"看到思考过程"**:
-
-```
-┌─────────────────────────────────┐
-│  分析 NVDA 中...                  │
-│  ✅ 基本面/估值 Agent  →  看多(上行空间大) │ ← 逐个 agent 出结论(流式)
-│  ✅ 技术面 Agent      →  中性(近支撑)     │
-│  ⏳ 风险/反方 Agent   →  分析中...         │
-├─────────────────────────────────┤
-│  🎯 裁决卡:                              │
-│   方向:谨慎偏多   置信:中                │
-│   目标区间:XXX–XXX                       │
-│   核心理由:3条                           │
-│   主要风险:2条                           │
-│   一句话:...                            │
-│   ⚠️ 模型分析,非投资建议                  │
-└─────────────────────────────────┘
-```
-- **逐 agent 流式展示**(像 AShare/TradingAgents):你能看到"为什么",而非黑箱给个结论。
-- 顶部可切"💰省钱模式"(只跑 1 个 agent,省 Azure token)。结尾固定决策卡 + 免责。
-- **图表**:文字报告为主,顶部嵌一张 ① 或 ② 做"数据快照"。
-
-### 4.5 ⚙️ 我的(设置)
-
-- **Azure 四件套**:Endpoint / Key / Deployment / API Version,带"测试连接"按钮。key 本地加密存,**界面明示"只存本机,绝不上传"**。
-- **我的纪律开关**:让你自定义"上行空间阈值""追高预警线""省钱模式默认开"——把纪律变成可调旋钮。
-- 自选股管理、缓存清理、关于/免责。
+- Azure four-part form: Endpoint, Key, Deployment, and API Version, plus
+  `Test Connection`
+- Watchlist, screening-refresh, and cache-management actions
+- Signed ONNX model import, validation result, active model version, and
+  rollback to the previous valid model
+- Preference toggles for discipline reminders and cost-saving mode
+- About, freshness, and disclaimer entry points
 
 ---
 
-## 5. 关键交互流程(用户旅程)
+## 5. Key interaction flows and user journeys
 
-### 流程A:每日打开(最高频)
-```
-开 App → 监控页 → 一眼"组合健康度"一句话 → 有红/黄卡才点进详情 → 看估值+支撑压力 → (需要才)点 AI 深析
-```
-> 设计目标:**健康时 10 秒看完就关**,不引诱你没事就盯盘下单。
+### Flow A Daily open
 
-### 流程B:想买一只新票(你的高危时刻)
+```text
+Open app -> Watchlist -> check summary -> open detail only when something needs attention -> run AI only if needed
 ```
-搜代码/筛选 → 详情页 → 先看上行空间%(够不够) → 看现价在52周位置(是不是追高) →
-  ⚠️ 若现价>52周高95% → 弹"追高预警"卡 → AI 深析 → 决策
-```
-> 在你最容易冲动的"想买"路径上,**强制先过估值和追高这两关**。
 
-### 流程C:持仓下跌焦虑(你的另一高危时刻)
-见 §8 行为对冲。
+### Flow B Evaluating a potential new name
+
+```text
+Search or screen -> Detail page -> check upside first -> check 52-week position and nearby resistance -> optionally run AI
+```
+
+### Flow C Handling a drawdown in a watched name
+
+See the behavioral counterweights in §8.
 
 ---
 
-## 6. 图表设计(可视化清单)
+<a id="6-chart-design-and-visualization-checklist"></a>
+## 6. Chart design and visualization checklist
 
-> 原则:**每张图都对应一个决策**,不画"好看但没用"的图;估值类图是主角,K线是配角。Flutter 端绘图(非 matplotlib),中文无缺字问题。配色统一走 [MASTER §2/§5](design-system/ai-stock-analyst/MASTER.md) 的反直觉估值语义,不在本文另定色值。
+Every chart must answer one judgment question. Page placement belongs here;
+exact style belongs in MASTER.
 
-### 6.1 Flutter 端图表库选型
+<a id="61-kotlin-compose-chart-technology-choice"></a>
+### 6.1 Kotlin Compose chart technology choice
 
-| 库 | 适合 | 取舍 |
-|----|------|------|
-| **fl_chart** ⭐主用 | 折线/柱状/饼/雷达/散点 | 纯Dart、活跃、零授权顾虑;**估值类图全覆盖**;画**分时折线**。K线蜡烛需叠 candlestick 扩展 |
-| **syncfusion_flutter_charts** | 专业金融图(自带K线/布林/均线/RSI) | 商业库(社区版个人免费,需注册License);画日/周/月K 蜡烛可选 |
-| **candlesticks** | 专门K线,开箱即用+缩放 | 画日/周/月K 蜡烛,配合 fl_chart |
+| Component | Use | Trade-off |
+|---|---|---|
+| [**Vico Compose**](https://github.com/patrykandpatrick/vico) | Candlestick, line, and column Cartesian layers with axes and zoom basics | Native Kotlin/Compose option for core charting |
+| **Compose overlay / Canvas** | Crosshair, labels, probability line panel or scale, resonance marks, gesture linkage | Adds business-specific interactions and overlays |
+| [**TradingView Lightweight Charts**](https://github.com/tradingview/lightweight-charts) through WebView | JavaScript charting | Apache-2.0, but WebView integration is costly for native state and accessibility |
+| [**TradingView Charting Library**](https://www.tradingview.com/HTML5-stock-forex-bitcoin-charting-library/) | Proprietary charting package | Do not integrate or distribute |
 
-> **选型结论**:主用 fl_chart 覆盖 P0/P1 估值与盈亏图**及详情页实时行情图的分时折线**;实时行情图的日/周/月K 蜡烛用 candlesticks 或 syncfusion。**实时多周期行情图(⑥)已升为 MVP 必做**(见 §6.2)。每张图的配色/A11y 规则见 [MASTER §5](design-system/ai-stock-analyst/MASTER.md),本节只管"画哪些图"。
+Choice: Vico provides the base layer and Compose provides the product-specific
+overlay and interaction model.
 
-### 6.2 核心可视化清单(按优先级)
+**TradingView-inspired acceptance checklist**
 
-**🥇 P0 —— 估值类(你的纪律核心,MVP 必做)**
+- Pinch to zoom, drag to pan, and double-tap to reset
+- Long-press crosshair with synchronized OHLC, volume, and time readout
+- Timeframe shortcuts `1m / 5m / 15m / 30m / 1h / 4h / 1D / 1M`, remembered per
+  symbol
+- Main chart and any sub-chart share the X-axis and crosshair
+- Candlesticks and the volume histogram stay visible together
+- The LightGBM probability line uses its own labeled probability scale or
+  dedicated sub-panel and never impersonates future price candles
+- Landscape full-screen mode with predictable back behavior
+- Loading more history keeps the viewport anchor stable
+- `Jump to latest` action without resetting manual zoom on live updates
+- TalkBack reads the selected bar and prediction label
 
-**① 上行空间条形图(Upside Bar)** —— 最重要
-- 形式:横向条形,每只股票一条,长度=上行空间%((中位目标价÷现价−1)),标注现价、中位目标价两端点。
-- 作用:**一眼看出哪只"离目标价还有空间",直接服务"在跌≠便宜,要看上行空间"。**
+<a id="62-core-visualization-checklist-by-priority"></a>
+### 6.2 Core visualization checklist by priority
 
-```
-NVDA   现价198 ──────────────●目标294   +48% 🟢
-GOOGL  现价356 ────────●目标430          +21% 🟢
-AMZN   现价238 ─────●目标315             +32% 🟢
-```
+**P0 - valuation visuals**
 
-**② 现价 vs 目标价 区间点图(防追高)**
-- 形式:一根从 52周低 → 52周高 的横轴,标出 现价 / 200日均线 / 中位目标价 三个点。
-- 作用:看现价在年度区间的**位置**;贴近52周高=追高预警(红),贴近低位+有上行空间=机会(绿)。
+1. **Upside bar**
+   - compares current price with median target price
+   - answers whether room to target still exists
+2. **Current price vs target positioning chart**
+   - places current price, annual range, and target on one axis
+   - answers whether upside remains while the name is already extended
+3. **Support and resistance level chart**
+   - shows nearest support below and resistance above
+   - highlights resonance levels from
+     [`analysis.md` §1.2](analysis.md#12-support-and-resistance-levels-four-required-methods)
+4. **Forward P/E comparison bars**
+   - compare relative cheapness across names
 
-**②b 支撑压力位图(你强调必做)** —— 详情页核心
-- 形式:以现价为中心的纵向价格轴,把 [`analysis.md` §1.2](analysis.md#12-支撑压力位必做4-种算法) 算出的**支撑位(下方)/压力位(上方)**标在轴上,注来源与距现价%,**≥2种方法共振的位置加粗**。配色按 MASTER §5(方向线走中性色,不抢估值红绿)。
-- 作用:一眼看"上方到压力还有多少空间、下方跌到哪有支撑",判断风险收益比。
+**P1 - market and technical visuals**
 
-**③ 前瞻PE 对比柱状图**
-- 形式:多只股票的 forwardPE 并排柱状,叠一条"行业/历史均值"参考线。
-- 作用:横向比"谁更便宜",贯彻低PE偏好;为负/异常值特殊标记。
+5. **Live market chart**
+   - hosts the intraday or higher-timeframe market view
+   - includes candlesticks, volume histogram, and the interaction model from
+     §6.1
+   - may host the `30m` probability line defined in
+     [`analysis.md` §4.3](analysis.md#43-live-inference-and-visualization-contract)
+   - must not invent future candles or deterministic price paths
+6. **LightGBM probability line**
+   - shows direction probability over time, not a future price forecast
+   - uses its own labeled probability scale or dedicated panel
+7. **Rating distribution, optional**
+   - summarizes analyst stance concentration
 
-**🥈 P1 —— 持仓/盈亏类(自选监控入口用)**
+**P2 - secondary technical visuals**
 
-**④ 盈亏概览**
-- 形式:每只持仓一行:成本→现价的迷你条 + 浮盈亏%(绿/红)。
-- 作用:把你每日 WeChat 监控报告的表格**可视化**;一眼看整体仓位健康度。
+8. **RSI or 52-week position view**
+   - provides a secondary overheating or oversold check
 
-**⑤ 评级分布(可选)**
-- 形式:小型堆叠条或饼图,展示 strongBuy/buy/hold/sell 分析师家数占比。
-- 作用:辅助判断市场共识强弱。
+ML-specific charts and the prediction contract remain owned by
+[`analysis.md` §4.3](analysis.md#43-live-inference-and-visualization-contract).
 
-**🥉 价格/技术类(⑥实时行情图升 MVP;⑦二期配角)**
+### 6.3 Data to chart field mapping
 
-**⑥ 实时行情图(多周期)—— MVP 必做(原 K线,从二期上移)**
-- 形式:顶部周期 Tab **分时/日K/周K/月K**;分时=当日1分钟线;日K 支持缩放看近5日/1月/3月/1年区间(覆盖"1天/3天"看盘诉求)。分时用 fl_chart 折线,日/周/月K 用 candlesticks/syncfusion 画蜡烛。
-- **右缘预测叠加**:图右缘叠 LightGBM「未来方向」预测(短虚线投影 + 涨跌概率标签),配色走中性/紫金,**绝不用估值红绿**(见 [`analysis.md` §4.3](analysis.md#43-结果可视化与产品红线))。
-- 作用:满足看盘诉求;预测**仅辅助信号**,不喧宾夺主。
-
-**⑦ RSI / 52周位置仪表**
-- 形式:RSI 折线(超买70/超卖30参考线)或半圆仪表盘显示52周位置百分位。
-- 作用:辅助判断是否过热/超卖。
-
-> ML 相关的 4 张图(预测扇形带 / 涨跌概率仪表 / 特征重要性 / 回测对比)见 [`analysis.md` §4.3](analysis.md#43-结果可视化与产品红线),配色走中性/紫金,不用估值红绿。
-
-### 6.3 数据 → 图 的字段映射
-
-| 图 | 依赖字段 | 来源(见 [`data-sources.md`](data-sources.md)) |
-|----|---------|----------------------|
-| ①上行空间 | currentPrice, targetMedianPrice | 价格→国内源;目标价→yfinance后端 |
-| ②区间点图 | currentPrice, 52周高低, 200日均线 | 价格/52周→国内源或yfinance;均线→yfinance |
-| ③前瞻PE | forwardPE | yfinance后端 |
-| ④盈亏 | currentPrice + 用户成本(本地存) | 价格→国内源;成本→本地 |
-| ⑥实时行情图 | 分时/日周月K OHLC + 方向预测 | 行情走腾讯实时行情接口(方案③国内价层,见 [`data-sources.md` §3.6](data-sources.md#36-腾讯实时行情图接口详情页实时行情图数据源));预测叠加取后端 `/predict` |
-
-> **估值类图(①②③)离不开 yfinance 的目标价/前瞻PE**(与 [`data-sources.md`](data-sources.md) 方案①/③一致);纯国内源/Finnhub 画不出上行空间图。
-
----
-
-## 7. 状态设计(空/加载/错误)
-
-| 状态 | 设计 |
-|------|------|
-| **首次打开(空)** | 引导填 Azure key + 加第一只自选股(用你的 GOOGL/AMZN/NVDA 做示例) |
-| **未填 Key** | AI 功能灰显,提示"去设置填 Azure key 解锁 AI 解读";估值/支撑压力**不依赖 key,照常可用** |
-| **加载中** | 估值数据骨架屏;AI 用流式逐 agent 出(不干等) |
-| **数据失效** | yfinance 偶尔挂([`data-sources.md`](data-sources.md) 已记录),显示"分析师数据暂不可用,稍后重试",价格仍从国内源出 |
-| **实时行情图刷新** | 分时线打开时 ~30–60s 轮询 / 下拉刷新;日/周/月K 每交易日美股收盘后更新一次;LightGBM 方向预测每交易日收盘后推理一次(非实时,后端 `/predict` 每日产出) |
-| **Azure 报错** | 明确区分:key 错/额度耗尽/网络,给具体修复指引(对齐 mochi-pet 多厂商踩坑经验) |
-
----
-
-## 8. ⭐ 行为对冲设计(本 App 的灵魂,专为你)
-
-> 你的习惯(USER.md 记录):①在跌就觉得便宜想买 ②小亏就焦虑 ③爱问"值不值得买" ④凭涨跌冲动下单。
-> UX 不能只是中立工具,要在这些时刻**温和地踩一脚刹车**。这是本 App 区别于普通行情软件的核心价值。
-
-| 你的高危时刻 | App 的对冲交互 |
-|------------|--------------|
-| **看到一只跌了想买** | 详情页置顶提示:"它跌了,但**上行空间只有 X%、前瞻PE Y**——便宜要看上行空间,不是看跌了多少。" 用你自己的纪律原话提醒。 |
-| **现价贴近52周高想追** | 弹"追高预警"卡:"现价在52周高位 95%,距最近压力仅 +2%,上方空间有限。" |
-| **持仓小亏就焦虑** | 监控卡显示真实百分比 + 一句:"当前 -0.7%,在正常波动内"。**防止你把 -0.7% 感知成 -5%**(你有过这种放大)。 |
-| **冲动想清仓/加仓** | AI 决策卡固定提示你的**三大卖出信号**(目标价下调/评级转空/基本面恶化),问一句:"现在触发了哪一条?都没有 → 也许只是情绪波动。" |
-| **没事乱刷盘** | 健康时监控页极简,不推送涨跌红绿,**不制造盯盘焦虑**。 |
-
-> 这些提示**温和、可关闭**(设置里"纪律提醒"开关),不强迫、不说教,但默认开启。目标:让 App 成为你纪律的延伸,而非又一个让你手痒的下单工具。
+| Chart | Required fields | Source |
+|---|---|---|
+| Upside bar | `currentPrice`, `targetMedianPrice` | Quote snapshot plus normalized fundamental snapshot |
+| Positioning chart | `currentPrice`, 52-week high/low, 200-day average, target | Quote snapshot plus normalized fundamental snapshot |
+| Analyst range card | `targetLowPrice`, `targetMedianPrice`, `targetHighPrice`, `numberOfAnalystOpinions`, freshness | Normalized fundamental snapshot |
+| AI forecast summary card | `horizonOutlooks`, confidence, evidence, watch conditions | Validated arbiter output from [`ai-prompt.md`](ai-prompt.md) |
+| Forward P/E comparison | `forwardPE` | Fundamental snapshot |
+| Live market chart | Intraday and higher-timeframe OHLCV, volume, and optional `30m` probability line | Tencent chart endpoints in [`data-sources.md` §2.3](data-sources.md#23-tencent-chart-endpoints-and-5-minute-aggregation) plus local prediction snapshots from [`analysis.md` §4.3](analysis.md#43-live-inference-and-visualization-contract) |
+| LightGBM probability line | `probabilityUp`, `asOf`, `horizon`, `modelVersion` | Local prediction snapshots from [`analysis.md` §4.3](analysis.md#43-live-inference-and-visualization-contract) |
 
 ---
 
-## 9. 决策登记
+<a id="7-state-design-empty-loading-and-error"></a>
+## 7. State design empty loading and error
 
-本文相关决策(可视化范围 V1、底部 4 Tab 结构 U1、行为对冲默认开 U3、详情页折叠 U4、AI 页展示方式 U5、配色语义 U2)的唯一出处是 [`architecture.md` §3.2 决策台账](architecture.md#3-决策台账全项目唯一决策出处),本文不再单列决策清单。
+| State | Design |
+|---|---|
+| First open / empty | Guide the user to add a first watchlist stock and configure Azure only if AI is wanted |
+| Key not configured | AI stays disabled with a direct path to settings; valuation and technical facts still work |
+| Loading | Show skeletons for valuation data and streaming progress for AI |
+| Data temporarily unavailable | Keep the last good snapshot visible, show timestamps, and explain which layer failed |
+| Screening refresh | Show WorkManager progress, last completed stage, resumable status, and cache freshness |
+| Live chart refresh | Follow quote freshness and fallback rules in [`data-sources.md` §4](data-sources.md#4-freshness-fallback-local-cache-and-implementation-checklist) and update prediction overlays only when the snapshot in [`analysis.md` §4.3](analysis.md#43-live-inference-and-visualization-contract) changes |
+| Azure error | Distinguish invalid key, exhausted quota, and network problems with recovery guidance |
+
+---
+
+<a id="8-behavioral-counterweights"></a>
+## 8. Behavioral counterweights
+
+The product should apply a gentle brake during high-risk moments instead of
+acting like a momentum toy.
+
+| High-risk moment | Counter-interaction |
+|---|---|
+| Seeing a stock fall and wanting to buy immediately | Restate upside and forward P/E before any bullish framing |
+| Wanting to chase near the 52-week high | Show a warning when the stock is near annual highs and close to resistance |
+| Feeling anxious over a small drawdown | Display the real percentage clearly and frame it against normal volatility instead of amplifying stress |
+| Wanting to act impulsively on a headline or price spike | Restate the main risk conditions and ask what factual trigger actually changed |
+| Repeatedly refreshing quotes with no purpose | Keep healthy states calm and low-noise rather than attention-seeking |
+
+These reminders should stay optional, but enabled by default unless the related
+open decision changes in [`architecture.md`](architecture.md).
