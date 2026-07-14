@@ -20,6 +20,16 @@
     <string name="ai_body">Fundamental, technical, and risk agents will run in parallel before an arbiter produces the final research summary.</string>
     <string name="ai_safety">AI output is research context, not investment advice or a trading instruction.</string>
     <string name="settings_title">Local settings</string>
+    <string name="settings_data_sources">Market data sources</string>
+    <string name="settings_data_sources_body">Choose quote, chart, and valuation providers independently. Each choice is stored only on this device.</string>
+    <string name="settings_quote_provider">Live quotes</string>
+    <string name="settings_chart_provider">Market charts</string>
+    <string name="settings_valuation_provider">Valuation and analyst data</string>
+    <string name="provider_auto">Auto fallback</string>
+    <string name="provider_tencent">Tencent</string>
+    <string name="provider_sina">Sina</string>
+    <string name="provider_yahoo_finance">Yahoo Finance</string>
+    <string name="settings_reset_data_sources">Reset data source settings</string>
     <string name="settings_azure">Azure OpenAI BYOK</string>
     <string name="settings_azure_body">Endpoint, key, deployment, and API version will be encrypted and stored on this device.</string>
     <string name="settings_runtime">Local-only runtime</string>

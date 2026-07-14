@@ -210,6 +210,14 @@ Arbiter card
 
 ### 4.5 Me settings page
 
+- Independent market-data provider selectors:
+  - Quotes: Auto (Tencent then Sina), Tencent-only, or Sina-only
+  - Charts: Tencent in the current implementation
+  - Valuation: Yahoo Finance in the current implementation
+- Provider choices persist locally. Explicit quote-provider modes surface
+  failure and stale-cache state instead of silently switching providers.
+- A visible reset action restores provider defaults when stored settings cannot
+  be read or migrated.
 - Azure four-part form: Endpoint, Key, Deployment, and API Version, plus
   `Test Connection`
 - Watchlist, screening-refresh, and cache-management actions

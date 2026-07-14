@@ -1,13 +1,18 @@
 package com.gongpx.aistockanalyst.di
 
 import android.content.Context
+import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.preferencesDataStore
 import androidx.room.Room
 import com.gongpx.aistockanalyst.data.MarketRepository
 import com.gongpx.aistockanalyst.data.RoomMarketRepository
+import com.gongpx.aistockanalyst.data.UserSelectedQuoteClient
 import com.gongpx.aistockanalyst.database.MarketDatabase
 import com.gongpx.aistockanalyst.database.QuoteDao
 import com.gongpx.aistockanalyst.database.ValuationDao
-import com.gongpx.aistockanalyst.network.FallbackQuoteClient
+import com.gongpx.aistockanalyst.datastore.DataStoreMarketDataSourceSettings
+import com.gongpx.aistockanalyst.datastore.MarketDataSourceSettingsStore
 import com.gongpx.aistockanalyst.network.InMemoryCookieJar
 import com.gongpx.aistockanalyst.network.MarketNetworkFactory
 import com.gongpx.aistockanalyst.network.QuoteClient
@@ -23,8 +28,21 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import java.time.Clock
 import javax.inject.Singleton
+import javax.inject.Qualifier
 import kotlinx.serialization.json.Json
 import okhttp3.OkHttpClient
+
+private val Context.marketDataSourceSettings by preferencesDataStore(
+    name = "market_data_sources",
+)
+
+@Qualifier
+@Retention(AnnotationRetention.BINARY)
+private annotation class TencentQuotes
+
+@Qualifier
+@Retention(AnnotationRetention.BINARY)
+private annotation class SinaQuotes
 
 @Module
 @InstallIn(SingletonComponent::class)
@@ -54,12 +72,30 @@ object MarketDataModule {
 
     @Provides
     @Singleton
-    fun provideQuoteClient(
+    @TencentQuotes
+    fun provideTencentQuoteClient(
         service: RawHttpService,
         clock: Clock,
-    ): QuoteClient = FallbackQuoteClient(
-        primary = TencentQuoteClient(service, clock),
-        fallback = SinaQuoteClient(service, clock),
+    ): QuoteClient = TencentQuoteClient(service, clock)
+
+    @Provides
+    @Singleton
+    @SinaQuotes
+    fun provideSinaQuoteClient(
+        service: RawHttpService,
+        clock: Clock,
+    ): QuoteClient = SinaQuoteClient(service, clock)
+
+    @Provides
+    @Singleton
+    fun provideQuoteClient(
+        settingsStore: MarketDataSourceSettingsStore,
+        @TencentQuotes tencentClient: QuoteClient,
+        @SinaQuotes sinaClient: QuoteClient,
+    ): QuoteClient = UserSelectedQuoteClient(
+        settingsStore = settingsStore,
+        tencentClient = tencentClient,
+        sinaClient = sinaClient,
     )
 
     @Provides
@@ -79,6 +115,18 @@ object MarketDataModule {
         MarketDatabase::class.java,
         "market.db",
     ).build()
+
+    @Provides
+    @Singleton
+    fun provideSettingsDataStore(
+        @ApplicationContext context: Context,
+    ): DataStore<Preferences> = context.marketDataSourceSettings
+
+    @Provides
+    @Singleton
+    fun provideDataSourceSettingsStore(
+        dataStore: DataStore<Preferences>,
+    ): MarketDataSourceSettingsStore = DataStoreMarketDataSourceSettings(dataStore)
 
     @Provides
     fun provideQuoteDao(database: MarketDatabase): QuoteDao = database.quoteDao()

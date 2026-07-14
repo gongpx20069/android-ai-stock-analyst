@@ -13,17 +13,28 @@
 
 | Responsibility | Selected source | Notes |
 |---|---|---|
-| Live quote snapshot | Tencent primary | China-friendly quote access without keys |
-| Live quote fallback | Sina fallback | Used only when Tencent fails or returns unusable data |
-| Intraday and higher-timeframe OHLCV | Tencent chart endpoints | Powers live charts, local bar aggregation, and feature generation |
+| Live quote snapshot | User choice: Auto, Tencent, or Sina | Auto uses Tencent first and Sina only on failure; explicit choices never switch silently |
+| Intraday and higher-timeframe OHLCV | Independently selected chart provider; Tencent currently available | Powers live charts, local bar aggregation, and feature generation |
 | Screening universe | Nasdaq public screener | Operating-company securities listed on NASDAQ, NYSE, and NYSE American |
-| Fundamental and analyst snapshot | Direct Yahoo Finance HTTP `quoteSummary` client in Android | Unofficial and revocable; cached locally in Room |
+| Fundamental and analyst snapshot | Independently selected valuation provider; Yahoo Finance currently available | Direct HTTP `quoteSummary` is unofficial and revocable; cached locally in Room |
 | Derived indicators | Local Kotlin calculation engine | Deterministic indicators are calculated on-device |
 | Prediction snapshots | ONNX Runtime Android | LightGBM inference runs on-device from bundled model assets |
 
 The app uses a split design on purpose: fast quote access comes from domestic
 quote endpoints, while slower-moving valuation data is normalized separately in
 local storage. No project server exists between the app and these providers.
+
+Provider choices are separate settings rather than one global source:
+
+- Quotes: `Auto` (default), Tencent-only, or Sina-only.
+- Charts: Tencent is the only implemented option; the setting is independent
+  so another chart client can be added without changing quote behavior.
+- Valuation: Yahoo Finance is the only implemented option; the setting is
+  independent so valuation availability never controls quote or chart refresh.
+
+All choices are persisted in Android DataStore. Explicit provider selection
+must surface that provider's failure and use the last good Room cache; it must
+not silently switch providers. Only `Auto` authorizes quote fallback.
 
 ---
 
@@ -48,7 +59,8 @@ local storage. No project server exists between the app and these providers.
   - market cap when present
   - 52-week high and low when present
 
-Use Tencent as the default real-time quote source.
+Tencent may be selected directly. It is also the first source used by the
+default `Auto` quote mode.
 
 ### 2.2 Sina fallback endpoint, header, and decoding
 
@@ -62,8 +74,8 @@ Use Tencent as the default real-time quote source.
   - comma-delimited text
   - GBK-encoded; decode to UTF-8 before parsing
 
-Use Sina only as a fallback when Tencent fails, times out, or returns an
-invalid payload.
+Sina may be selected directly. In `Auto` quote mode it is used only when
+Tencent fails, times out, or returns an invalid payload.
 
 <a id="23-tencent-chart-endpoints-and-5-minute-aggregation"></a>
 ### 2.3 Tencent chart endpoints and 5-minute aggregation
@@ -172,7 +184,7 @@ continue to work.
 
 | Data surface | Freshness expectation | Fallback / stale behavior |
 |---|---|---|
-| Live quote snapshot | Poll every 30-60 seconds or refresh manually | Fall back from Tencent to Sina; if both fail, show stale quote status and keep the last good timestamp visible |
+| Live quote snapshot | Poll every 30-60 seconds or refresh manually | Auto falls back from Tencent to Sina; explicit Tencent/Sina modes do not switch. On failure, show stale status and keep the last good timestamp visible |
 | Intraday bars for charting and ML | Use only completed bars | If a gap cannot be repaired, mark intraday predictions stale rather than guessing |
 | Daily / monthly candles | Refresh after market close or when the vendor publishes the new bar | Keep the last good history and show the chart timestamp |
 | Fundamental snapshot | Refresh on a daily cache cadence | Keep the last good cache in Room and show freshness warnings when analyst data is stale |
@@ -206,6 +218,8 @@ reuse the same canonical bar set.
 
 - [x] Map Tencent and Sina fields explicitly by positional index; do not rely on
       undocumented field names.
+- [x] Persist quote, chart, and valuation provider choices independently in
+      DataStore; allow fallback only in explicit Auto quote mode.
 - [x] Encapsulate Yahoo cookie, crumb, session, and module handling inside the
       direct Android client; do not leak provider quirks into UI code.
 - [x] Normalize quote timestamps using the canonical exchange-time model from

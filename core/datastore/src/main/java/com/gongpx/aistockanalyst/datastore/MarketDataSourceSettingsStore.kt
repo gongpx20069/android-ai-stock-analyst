@@ -1,0 +1,108 @@
+package com.gongpx.aistockanalyst.datastore
+
+import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.stringPreferencesKey
+import com.gongpx.aistockanalyst.model.ChartProvider
+import com.gongpx.aistockanalyst.model.MarketDataSourceSettings
+import com.gongpx.aistockanalyst.model.QuoteProvider
+import com.gongpx.aistockanalyst.model.ValuationProvider
+import java.io.IOException
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
+
+interface MarketDataSourceSettingsStore {
+    val settings: Flow<MarketDataSourceSettings>
+
+    suspend fun current(): MarketDataSourceSettings = settings.first()
+
+    suspend fun setQuoteProvider(provider: QuoteProvider)
+
+    suspend fun setChartProvider(provider: ChartProvider)
+
+    suspend fun setValuationProvider(provider: ValuationProvider)
+
+    suspend fun resetToDefaults()
+}
+
+class DataStoreMarketDataSourceSettings(
+    private val dataStore: DataStore<Preferences>,
+) : MarketDataSourceSettingsStore {
+    override val settings: Flow<MarketDataSourceSettings> = dataStore.data
+        .catch { failure ->
+            if (failure is IOException) {
+                throw SettingsStorageException("Unable to read data source settings", failure)
+            }
+            throw failure
+        }
+        .map(::toSettings)
+
+    override suspend fun setQuoteProvider(provider: QuoteProvider) {
+        update(QUOTE_PROVIDER, provider.name)
+    }
+
+    override suspend fun setChartProvider(provider: ChartProvider) {
+        update(CHART_PROVIDER, provider.name)
+    }
+
+    override suspend fun setValuationProvider(provider: ValuationProvider) {
+        update(VALUATION_PROVIDER, provider.name)
+    }
+
+    override suspend fun resetToDefaults() {
+        try {
+            dataStore.edit { preferences ->
+                preferences.clear()
+            }
+        } catch (failure: IOException) {
+            throw SettingsStorageException("Unable to reset data source settings", failure)
+        }
+    }
+
+    private suspend fun update(
+        key: Preferences.Key<String>,
+        value: String,
+    ) {
+        try {
+            dataStore.edit { preferences ->
+                preferences[key] = value
+            }
+        } catch (failure: IOException) {
+            throw SettingsStorageException("Unable to persist data source settings", failure)
+        }
+    }
+
+    private fun toSettings(preferences: Preferences): MarketDataSourceSettings =
+        try {
+            MarketDataSourceSettings(
+                quoteProvider = preferences[QUOTE_PROVIDER]
+                    ?.let(QuoteProvider::valueOf)
+                    ?: QuoteProvider.AUTO,
+                chartProvider = preferences[CHART_PROVIDER]
+                    ?.let(ChartProvider::valueOf)
+                    ?: ChartProvider.TENCENT,
+                valuationProvider = preferences[VALUATION_PROVIDER]
+                    ?.let(ValuationProvider::valueOf)
+                    ?: ValuationProvider.YAHOO_FINANCE,
+            )
+        } catch (failure: IllegalArgumentException) {
+            throw SettingsStorageException(
+                "Stored data source setting is not supported",
+                failure,
+            )
+        }
+
+    companion object {
+        private val QUOTE_PROVIDER = stringPreferencesKey("quote_provider")
+        private val CHART_PROVIDER = stringPreferencesKey("chart_provider")
+        private val VALUATION_PROVIDER = stringPreferencesKey("valuation_provider")
+    }
+}
+
+class SettingsStorageException(
+    message: String,
+    cause: Throwable,
+) : IOException(message, cause)

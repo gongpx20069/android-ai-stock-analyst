@@ -19,6 +19,8 @@ recommender.
   assets are not bundled.
 - **Local-only runtime:** quote fetching, caching, screening, indicator
   calculation, and ML inference run inside the Android app.
+- **User-selected data sources:** quote, chart, and valuation providers are
+  configured independently and stored only on-device.
 - **BYOK Azure OpenAI:** users provide their own Endpoint, Key, Deployment,
   and API Version. The key is encrypted on-device and sent only to the
   configured Azure endpoint.
@@ -33,9 +35,10 @@ recommender.
 
 Implementation has started. The repository now contains the native
 Kotlin/Compose project, four-tab application shell, shared design system,
-market-domain models, Tencent quote parsing with Sina fallback, an isolated
-Yahoo Finance cookie/crumb valuation client, Room-backed quote and valuation caches, and a
-Hilt-wired repository with explicit stale-cache results. Chart bars,
+market-domain models, user-selectable Tencent/Sina quote routing, an isolated
+Yahoo Finance cookie/crumb valuation client, Room-backed quote and valuation
+caches, DataStore provider settings, and a Hilt-wired repository with explicit
+stale-cache results. Chart bars,
 indicators, screening, ONNX inference, and Azure integration are the next
 delivery slices.
 

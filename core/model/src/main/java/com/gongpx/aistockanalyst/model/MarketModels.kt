@@ -36,6 +36,26 @@ enum class DataSource {
     ONNX_RUNTIME,
 }
 
+enum class QuoteProvider {
+    AUTO,
+    TENCENT,
+    SINA,
+}
+
+enum class ChartProvider {
+    TENCENT,
+}
+
+enum class ValuationProvider {
+    YAHOO_FINANCE,
+}
+
+data class MarketDataSourceSettings(
+    val quoteProvider: QuoteProvider = QuoteProvider.AUTO,
+    val chartProvider: ChartProvider = ChartProvider.TENCENT,
+    val valuationProvider: ValuationProvider = ValuationProvider.YAHOO_FINANCE,
+)
+
 enum class ParseStatus {
     VALID,
     PARTIAL,

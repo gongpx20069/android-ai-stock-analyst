@@ -16,6 +16,7 @@ Azure OpenAI 解读放在一起，但不把自己包装成买卖推荐工具。
   的专有代码、品牌或素材。
 - **完全本地运行：**抓取行情、缓存、筛选、指标计算和 ML 推理都在 Android
   App 内完成，不需要项目服务器。
+- **用户选择数据源：**行情、图表和估值数据源分别配置，选择只保存在本机。
 - **BYOK Azure OpenAI：**用户填写 Endpoint、Key、Deployment、API Version，
   Key 在本机加密保存，只发送给用户配置的 Azure Endpoint。
 - **仅支持 watchlist：**产品只支持自选列表和研究建议，不提供持仓、成本价、
@@ -26,8 +27,9 @@ Azure OpenAI 解读放在一起，但不把自己包装成买卖推荐工具。
 ## 当前状态
 
 项目已经开始实现。仓库现已包含原生 Kotlin/Compose 工程、四个底部页面的应用
-骨架、共享设计系统、市场领域模型、腾讯行情解析与新浪回退、隔离的 Yahoo Finance
-Cookie/Crumb 估值客户端、Room 行情与估值缓存，以及通过 Hilt 接入的本地数据仓库。K 线图表、
+骨架、共享设计系统、市场领域模型、可选择的腾讯/新浪行情路由、隔离的 Yahoo
+Finance Cookie/Crumb 估值客户端、Room 行情与估值缓存、DataStore 数据源设置，
+以及通过 Hilt 接入的本地数据仓库。K 线图表、
 指标、筛选、ONNX 推理和 Azure 集成将按
 [架构与决策台账](docs/architecture.md)继续交付。除本文件外，其余技术文档均为英文。
 

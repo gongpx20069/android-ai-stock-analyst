@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -22,6 +23,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -40,6 +42,9 @@ import androidx.compose.ui.text.font.FontWeight
 import com.gongpx.aistockanalyst.R
 import com.gongpx.aistockanalyst.designsystem.theme.AppColors
 import com.gongpx.aistockanalyst.designsystem.theme.AppSpacing
+import com.gongpx.aistockanalyst.model.ChartProvider
+import com.gongpx.aistockanalyst.model.QuoteProvider
+import com.gongpx.aistockanalyst.model.ValuationProvider
 
 private enum class AppDestination(
     val label: Int,
@@ -52,7 +57,13 @@ private enum class AppDestination(
 }
 
 @Composable
-fun AnalystApp() {
+fun AnalystApp(
+    settingsState: SettingsUiState,
+    onQuoteProviderSelected: (QuoteProvider) -> Unit,
+    onChartProviderSelected: (ChartProvider) -> Unit,
+    onValuationProviderSelected: (ValuationProvider) -> Unit,
+    onResetDataSourceSettings: () -> Unit,
+) {
     var destinationName by rememberSaveable {
         mutableStateOf(AppDestination.Watchlist.name)
     }
@@ -81,7 +92,14 @@ fun AnalystApp() {
             AppDestination.Watchlist -> WatchlistScreen(innerPadding)
             AppDestination.Screening -> ScreeningScreen(innerPadding)
             AppDestination.Ai -> AiScreen(innerPadding)
-            AppDestination.Me -> SettingsScreen(innerPadding)
+            AppDestination.Me -> SettingsScreen(
+                contentPadding = innerPadding,
+                settingsState = settingsState,
+                onQuoteProviderSelected = onQuoteProviderSelected,
+                onChartProviderSelected = onChartProviderSelected,
+                onValuationProviderSelected = onValuationProviderSelected,
+                onResetDataSourceSettings = onResetDataSourceSettings,
+            )
         }
     }
 }
@@ -167,9 +185,69 @@ private fun AiScreen(contentPadding: PaddingValues) {
 }
 
 @Composable
-private fun SettingsScreen(contentPadding: PaddingValues) {
+private fun SettingsScreen(
+    contentPadding: PaddingValues,
+    settingsState: SettingsUiState,
+    onQuoteProviderSelected: (QuoteProvider) -> Unit,
+    onChartProviderSelected: (ChartProvider) -> Unit,
+    onValuationProviderSelected: (ValuationProvider) -> Unit,
+    onResetDataSourceSettings: () -> Unit,
+) {
     ScreenContainer(contentPadding) {
         ScreenTitle(stringResource(R.string.settings_title))
+        InformationCard {
+            Text(
+                text = stringResource(R.string.settings_data_sources),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+            )
+            Spacer(Modifier.height(AppSpacing.small))
+            Text(
+                text = stringResource(R.string.settings_data_sources_body),
+                color = AppColors.onSurfaceMuted,
+            )
+            Spacer(Modifier.height(AppSpacing.medium))
+            ProviderSelector(
+                title = stringResource(R.string.settings_quote_provider),
+                options = QuoteProvider.entries,
+                selected = settingsState.dataSources.quoteProvider,
+                label = { provider ->
+                    when (provider) {
+                        QuoteProvider.AUTO -> stringResource(R.string.provider_auto)
+                        QuoteProvider.TENCENT -> stringResource(R.string.provider_tencent)
+                        QuoteProvider.SINA -> stringResource(R.string.provider_sina)
+                    }
+                },
+                onSelected = onQuoteProviderSelected,
+            )
+            Spacer(Modifier.height(AppSpacing.medium))
+            ProviderSelector(
+                title = stringResource(R.string.settings_chart_provider),
+                options = ChartProvider.entries,
+                selected = settingsState.dataSources.chartProvider,
+                label = { stringResource(R.string.provider_tencent) },
+                onSelected = onChartProviderSelected,
+            )
+            Spacer(Modifier.height(AppSpacing.medium))
+            ProviderSelector(
+                title = stringResource(R.string.settings_valuation_provider),
+                options = ValuationProvider.entries,
+                selected = settingsState.dataSources.valuationProvider,
+                label = { stringResource(R.string.provider_yahoo_finance) },
+                onSelected = onValuationProviderSelected,
+            )
+            settingsState.storageError?.let { error ->
+                Spacer(Modifier.height(AppSpacing.medium))
+                Text(
+                    text = error,
+                    color = MaterialTheme.colorScheme.error,
+                )
+                Spacer(Modifier.height(AppSpacing.small))
+                Button(onClick = onResetDataSourceSettings) {
+                    Text(stringResource(R.string.settings_reset_data_sources))
+                }
+            }
+        }
         InformationCard {
             Text(
                 text = stringResource(R.string.settings_azure),
@@ -192,6 +270,32 @@ private fun SettingsScreen(contentPadding: PaddingValues) {
             Text(
                 text = stringResource(R.string.settings_runtime_body),
                 color = AppColors.onSurfaceMuted,
+            )
+        }
+    }
+}
+
+@Composable
+private fun <T> ProviderSelector(
+    title: String,
+    options: List<T>,
+    selected: T,
+    label: @Composable (T) -> String,
+    onSelected: (T) -> Unit,
+) {
+    Text(
+        text = title,
+        style = MaterialTheme.typography.labelLarge,
+    )
+    Spacer(Modifier.height(AppSpacing.extraSmall))
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(AppSpacing.small),
+    ) {
+        options.forEach { option ->
+            FilterChip(
+                selected = option == selected,
+                onClick = { onSelected(option) },
+                label = { Text(label(option)) },
             )
         }
     }
@@ -241,7 +345,7 @@ private fun SemanticRow(
     text: String,
     color: Color,
 ) {
-    androidx.compose.foundation.layout.Row(
+    Row(
         horizontalArrangement = Arrangement.spacedBy(AppSpacing.small),
     ) {
         Icon(

@@ -3,7 +3,7 @@ plugins {
 }
 
 android {
-    namespace = "com.gongpx.aistockanalyst.data"
+    namespace = "com.gongpx.aistockanalyst.datastore"
     compileSdk = 36
 
     defaultConfig {
@@ -17,11 +17,6 @@ android {
 }
 
 dependencies {
-    implementation(project(":core:database"))
-    implementation(project(":core:datastore"))
     implementation(project(":core:model"))
-    implementation(project(":core:network"))
-    implementation(libs.kotlinx.coroutines.core)
-
-    testImplementation(libs.junit)
+    implementation(libs.datastore.preferences)
 }

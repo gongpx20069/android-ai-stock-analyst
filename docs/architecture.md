@@ -63,8 +63,14 @@ Boundaries:
   structured cache; DataStore for settings; Android Keystore for Azure Key
   encryption.
 - Direct Android clients fetch:
-  - Tencent primary and Sina fallback live quotes and OHLCV
-  - Yahoo Finance `quoteSummary` modules for valuation and analyst fields
+  - live quotes from the user-selected `Auto`, Tencent-only, or Sina-only mode
+  - OHLCV from the independently selected chart provider; Tencent is the
+    currently available implementation
+  - valuation and analyst fields from the independently selected valuation
+    provider; Yahoo Finance is the currently available implementation
+- DataStore persists quote, chart, and valuation provider choices separately.
+  `Auto` is the default quote mode and uses Tencent first, then Sina only when
+  Tencent fails or returns an unusable payload.
 - Room stores normalized quote, bar, fundamental, screening, and prediction
   snapshots with source and freshness metadata.
 - WorkManager handles batched screening refreshes, model/data maintenance, and
@@ -83,9 +89,11 @@ Boundaries:
 
 ### 2.2 External dependency boundary
 
-- Tencent is the primary source for live quotes and chart bars.
-- Sina is the fallback source for live quotes when Tencent fails.
-- Yahoo Finance `quoteSummary` is the direct source for target median price,
+- Tencent and Sina are independently selectable live-quote providers. The
+  default `Auto` mode treats Tencent as primary and Sina as fallback.
+- Tencent is the currently available chart provider.
+- Yahoo Finance `quoteSummary` is the currently available valuation provider
+  for target median price,
   forward P/E, analyst coverage and rating, moving averages, and 52-week
   fields. It is unofficial and may change without notice.
 - Azure OpenAI is called directly from Android only when the user has
@@ -102,7 +110,7 @@ Boundaries:
 | A1 | Android stack | **Native Kotlin plus Jetpack Compose**, replacing the earlier cross-platform direction | §2.1 |
 | A2 | Android architecture | Material 3 + MVVM/UDF + Coroutines/Flow + Hilt + Retrofit/OkHttp + Room/DataStore + Keystore | §2.1 |
 | A3 | Build baseline | Gradle Wrapper 9.4.1, Android Gradle Plugin 9.2.0, JDK 17, compile/target SDK 36, and minimum SDK 26 | Repository build files |
-| B | Data approach | **Direct Android provider clients**: Tencent primary and Sina fallback for quotes/OHLCV; direct Yahoo Finance HTTP `quoteSummary` for valuation and analyst fields; Room caches all normalized snapshots | [`data-sources.md`](data-sources.md) |
+| B | Data approach | **User-controlled direct Android providers**: quote, chart, and valuation providers are configured independently in DataStore. Quote options are Auto (Tencent then Sina), Tencent-only, and Sina-only; Tencent is the current chart provider and Yahoo Finance `quoteSummary` is the current valuation provider. Room caches normalized snapshots | [`data-sources.md`](data-sources.md) |
 | B2 | Canonical symbol and time model | Use provider-specific symbol mapping at the edges; keep exchange-time-correct timestamps internally for DST, holidays, and bar boundaries; convert every displayed timestamp to the device local timezone | [`data-sources.md`](data-sources.md) |
 | B3 | Project-server boundary | No project server exists for the MVP or current architecture; runtime networking and processing stay local to Android | §2 |
 | Q1 | AI architecture | Streamlined **3 plus 1**: fundamentals, technicals, risk, arbiter | [`analysis.md` §3.1](analysis.md#31-streamlined-3-plus-1-flow) |
@@ -148,10 +156,10 @@ Boundaries:
 
 | Data | Source | Freshness | App expression |
 |---|---|---|---|
-| Current price and live quote snapshot | Tencent primary, Sina fallback | 30-60 second polling | Show quote timestamp |
-| 1-minute bars and local completed 5-minute bars | Tencent chart endpoints plus local Room aggregation | Every completed bar | Drive charts, indicators, screening signals, and `30m` inference |
-| 15-minute, 30-minute, 1-hour, 4-hour, daily, and monthly candles | Tencent chart endpoints, local aggregation, and Room cache | Refresh after vendor publication | Multi-timeframe chart history |
-| Analyst low/median/high targets, forward P/E, rating, analyst count, averages, and 52-week fields | Direct Yahoo Finance HTTP `quoteSummary`, cached locally in Room | Daily cache cadence | Show analyst range and AI summary outside the chart; degrade only valuation-dependent features on failure |
+| Current price and live quote snapshot | User-selected Auto, Tencent, or Sina mode | 30-60 second polling | Show quote timestamp and actual source |
+| 1-minute bars and local completed 5-minute bars | User-selected chart provider; Tencent currently available, plus local Room aggregation | Every completed bar | Drive charts, indicators, screening signals, and `30m` inference |
+| 15-minute, 30-minute, 1-hour, 4-hour, daily, and monthly candles | User-selected chart provider; Tencent currently available, local aggregation, and Room cache | Refresh after vendor publication | Multi-timeframe chart history |
+| Analyst low/median/high targets, forward P/E, rating, analyst count, averages, and 52-week fields | User-selected valuation provider; Yahoo Finance currently available and cached locally in Room | Daily cache cadence | Show analyst range and AI summary outside the chart; degrade only valuation-dependent features on failure |
 | Screening refresh state | WorkManager plus Room | Background batched refreshes | Show progress, resumable status, and cache freshness |
 | 30-minute direction probability | ONNX Runtime Android intraday model | After each completed local 5-minute bar | Show horizon, probability, model version, and freshness |
 | 5-day direction probability | ONNX Runtime Android daily model | After each market close | Display separately from intraday probability |
@@ -180,6 +188,7 @@ metrics. For the full contract, see
 | [`../app/`](../app/) | Android application, four-tab Compose shell, and Hilt graph | Implemented foundation |
 | [`../core/data/`](../core/data/) | Local-first repository and stale-cache refresh behavior | Implemented quote/valuation slice |
 | [`../core/database/`](../core/database/) | Room cache, DAOs, schema, and model mappings | Implemented quote/valuation slice |
+| [`../core/datastore/`](../core/datastore/) | Independent quote, chart, and valuation provider preferences | Implemented |
 | [`../core/model/`](../core/model/) | Canonical market-domain models | Implemented foundation |
 | [`../core/domain/`](../core/domain/) | Deterministic valuation and time calculations | Implemented foundation |
 | [`../core/designsystem/`](../core/designsystem/) | Compose design tokens and theme | Implemented foundation |

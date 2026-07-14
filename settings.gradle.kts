@@ -19,6 +19,7 @@ rootProject.name = "android-ai-stock-analyst"
 include(":app")
 include(":core:data")
 include(":core:database")
+include(":core:datastore")
 include(":core:model")
 include(":core:domain")
 include(":core:designsystem")
