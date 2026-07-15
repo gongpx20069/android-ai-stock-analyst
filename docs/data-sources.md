@@ -165,10 +165,31 @@ not return trustworthy recent US history. Tencent is therefore quote-only.
 These endpoints remain rejected even though Alpaca is now available. They
 must not be reintroduced as chart fallbacks.
 
-For the MVP, the Android app must build **completed 5-minute bars** locally by
-aggregating verified 1-minute data in exchange time. Re-check any undocumented
-direct `m5` endpoint before release; if it proves stable, it may be used as a
-replenishment or fallback source, not as an unverified assumption.
+For the MVP, the Android app builds **completed 5-minute bars** locally by
+aggregating verified Alpaca IEX 1-minute data in exchange time. Alpaca's native
+`5Min` interval is not used for the canonical five-minute refresh path. The
+rejected Tencent `m5` endpoint must not be used as replenishment or fallback.
+
+Local aggregation contract:
+
+- Align each source minute to a five-minute wall-clock bucket in the
+  symbol's exchange timezone.
+- Emit a bucket only after its end boundary has passed.
+- Use the first open, maximum high, minimum low, last close, and exact summed
+  source volume.
+- Preserve the Alpaca IEX source so every derived chart continues to disclose
+  its non-consolidated feed.
+- Treat an absent source minute as a possible no-trade interval; do not create
+  a synthetic flat or zero-volume minute.
+- When duplicate provider versions share a minute start, use the version with
+  the latest `fetchedAt`.
+- Expand unaligned refreshes to enclosing five-minute exchange-time boundaries
+  before fetching and replacing cache ranges, then return only bars fully
+  contained by the caller's original range.
+- Route both one-minute and five-minute refresh requests through the coupled
+  transaction so source corrections always regenerate affected derived bars.
+- Replace the requested one-minute and five-minute Room ranges in one
+  transaction so provider corrections cannot leave mixed generations.
 
 Implementation requirements:
 
@@ -308,7 +329,7 @@ reuse the same canonical bar set.
       repository results.
 - [x] Keep quote refresh and cached watchlist data available when Yahoo
       valuation refresh fails.
-- [ ] Build completed 5-minute bars locally and never infer from unfinished
+- [x] Build completed 5-minute bars locally and never infer from unfinished
       bars.
 - [x] Define canonical bar persistence with source, fetch time, parse status,
       interval, and exchange metadata; deduplicate by the Room primary key.

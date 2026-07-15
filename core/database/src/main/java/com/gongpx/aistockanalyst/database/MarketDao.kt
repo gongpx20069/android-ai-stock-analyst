@@ -166,4 +166,32 @@ interface PriceBarDao {
         )
         upsertAll(entities)
     }
+
+    @Transaction
+    suspend fun replaceOneAndFiveMinuteRanges(
+        symbol: String,
+        exchange: String,
+        oneMinuteInterval: String,
+        fiveMinuteInterval: String,
+        startEpochMillis: Long,
+        endExclusiveEpochMillis: Long,
+        oneMinuteEntities: List<PriceBarEntity>,
+        fiveMinuteEntities: List<PriceBarEntity>,
+    ) {
+        deleteRange(
+            symbol = symbol,
+            exchange = exchange,
+            interval = oneMinuteInterval,
+            startEpochMillis = startEpochMillis,
+            endExclusiveEpochMillis = endExclusiveEpochMillis,
+        )
+        deleteRange(
+            symbol = symbol,
+            exchange = exchange,
+            interval = fiveMinuteInterval,
+            startEpochMillis = startEpochMillis,
+            endExclusiveEpochMillis = endExclusiveEpochMillis,
+        )
+        upsertAll(oneMinuteEntities + fiveMinuteEntities)
+    }
 }

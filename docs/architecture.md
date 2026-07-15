@@ -193,7 +193,7 @@ metrics. For the full contract, see
 | [`../core/database/`](../core/database/) | Room cache, DAOs, schema, and model mappings | Implemented quote, valuation, and bar-history slices |
 | [`../core/datastore/`](../core/datastore/) | Provider preferences and Android-Keystore-backed Alpaca credentials | Implemented |
 | [`../core/model/`](../core/model/) | Canonical market-domain models | Implemented foundation |
-| [`../core/domain/`](../core/domain/) | Deterministic valuation and time calculations | Implemented foundation |
+| [`../core/domain/`](../core/domain/) | Deterministic valuation, time, and completed five-minute bar aggregation | Implemented foundation |
 | [`../core/designsystem/`](../core/designsystem/) | Compose design tokens and theme | Implemented foundation |
 | [`../core/network/`](../core/network/) | Direct quote, Alpaca IEX chart, and valuation clients | Implemented quote/valuation/chart ingestion slices |
 
@@ -202,7 +202,8 @@ metrics. For the full contract, see
 Steps 1 and 2 are implemented for quote and valuation snapshots. Step 3 now
 has the canonical `PriceBar` model, Room v2 schema, DAO, mappings, observable
 cache API, and opt-in Alpaca Basic ingestion with encrypted BYOK credentials.
-Local 5-minute aggregation, indicators, and chart presentation remain.
+Completed local 5-minute aggregation and atomic source/derived persistence are
+implemented. Indicators and chart presentation remain.
 
 1. Create the Kotlin/Compose Android skeleton with the locked local-only
    module boundaries.

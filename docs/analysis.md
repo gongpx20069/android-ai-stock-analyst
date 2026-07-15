@@ -111,10 +111,11 @@ The main UI summary is a pair of numeric cards:
 ```text
 [Android provider clients]
   ├─ Tencent / Sina -> quotes
-  ├─ User-selected Alpaca Basic -> Live IEX, non-consolidated OHLCV
+  ├─ User-selected Alpaca Basic -> Live IEX 1-minute OHLCV
   └─ Yahoo Finance -> valuation and analyst snapshot
         ▼
 [Room repositories]
+  └─ Exchange-time 1-minute -> completed local 5-minute aggregation
         ▼
 [Local Kotlin use cases]
   ├─ Valuation snapshot

@@ -41,8 +41,10 @@ caches, DataStore provider settings, and a Hilt-wired repository with explicit
 stale-cache results. Alpaca Basic is available as an opt-in chart provider
 using encrypted user credentials and explicit Live IEX, non-consolidated feed
 disclosure. Its paginated split-adjusted bars now flow into the canonical
-`PriceBar` model and Room v2 cache. Local 5-minute aggregation, indicators,
-chart UI, screening, and ONNX inference remain to be implemented.
+`PriceBar` model and Room v2 cache. Completed 5-minute bars are now derived
+locally from exchange-time-aligned 1-minute IEX bars and persisted atomically
+with their source range. Indicators, chart UI, screening, and ONNX inference
+remain to be implemented.
 
 ## Documentation
 

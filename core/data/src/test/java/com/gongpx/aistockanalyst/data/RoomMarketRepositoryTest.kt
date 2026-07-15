@@ -160,6 +160,18 @@ class RoomMarketRepositoryTest {
                 endExclusiveEpochMillis = expected.endExclusive.toEpochMilli(),
             ),
         )
+        assertEquals(
+            listOf(200.0),
+            priceBarDao.getRange(
+                symbol = symbol.value,
+                exchange = Exchange.NASDAQ.name,
+                interval = BarInterval.FIVE_MINUTES.name,
+                source = DataSource.ALPACA_IEX.name,
+                startEpochMillis = expected.start.toEpochMilli(),
+                endExclusiveEpochMillis = Instant.parse("2026-07-14T15:05:00Z")
+                    .toEpochMilli(),
+            ).map(PriceBarEntity::close),
+        )
     }
 
     @Test
@@ -204,6 +216,214 @@ class RoomMarketRepositoryTest {
         assertEquals(listOf(cached), result.value)
         assertEquals("rate limited", result.failureMessage)
     }
+
+    @Test
+    fun `five-minute refresh fetches one-minute bars and persists both intervals`() =
+        runBlocking {
+            val symbol = StockSymbol.of("AAPL")
+            val requestedIntervals = mutableListOf<BarInterval>()
+            val oneMinuteBars = (0L..4L).map { minute ->
+                priceBar(symbol).copy(
+                    start = Instant.parse("2026-07-14T15:00:00Z")
+                        .plusSeconds(minute * 60),
+                    endExclusive = Instant.parse("2026-07-14T15:01:00Z")
+                        .plusSeconds(minute * 60),
+                    high = 205.0,
+                    close = 200.0 + minute,
+                )
+            }
+            val priceBarDao = FakePriceBarDao()
+            val repository = RoomMarketRepository(
+                quoteClient = UnusedQuoteClient,
+                chartClient = object : ChartClient {
+                    override suspend fun fetchBars(
+                        symbol: StockSymbol,
+                        exchange: Exchange,
+                        interval: BarInterval,
+                        start: Instant,
+                        endExclusive: Instant,
+                    ): List<PriceBar> {
+                        requestedIntervals += interval
+                        return oneMinuteBars
+                    }
+                },
+                valuationClient = UnusedValuationClient,
+                settingsStore = AlpacaSettingsStore,
+                quoteDao = FakeQuoteDao(),
+                valuationDao = FakeValuationDao(),
+                priceBarDao = priceBarDao,
+                clock = Clock.fixed(
+                    Instant.parse("2026-07-14T15:05:00Z"),
+                    ZoneOffset.UTC,
+                ),
+            )
+
+            val result = repository.refreshBars(
+                symbol = symbol,
+                exchange = Exchange.NASDAQ,
+                interval = BarInterval.FIVE_MINUTES,
+                start = Instant.parse("2026-07-14T15:00:00Z"),
+                endExclusive = Instant.parse("2026-07-14T15:05:00Z"),
+            )
+
+            assertEquals(listOf(BarInterval.ONE_MINUTE), requestedIntervals)
+            assertTrue(result is RefreshResult.Fresh)
+            assertEquals(1, result.value.size)
+            assertEquals(BarInterval.FIVE_MINUTES, result.value.single().interval)
+            assertEquals(
+                5,
+                priceBarDao.getRange(
+                    symbol = symbol.value,
+                    exchange = Exchange.NASDAQ.name,
+                    interval = BarInterval.ONE_MINUTE.name,
+                    source = DataSource.ALPACA_IEX.name,
+                    startEpochMillis = Instant.parse("2026-07-14T15:00:00Z")
+                        .toEpochMilli(),
+                    endExclusiveEpochMillis = Instant.parse("2026-07-14T15:05:00Z")
+                        .toEpochMilli(),
+                ).size,
+            )
+            assertEquals(
+                1,
+                priceBarDao.getRange(
+                    symbol = symbol.value,
+                    exchange = Exchange.NASDAQ.name,
+                    interval = BarInterval.FIVE_MINUTES.name,
+                    source = DataSource.ALPACA_IEX.name,
+                    startEpochMillis = Instant.parse("2026-07-14T15:00:00Z")
+                        .toEpochMilli(),
+                    endExclusiveEpochMillis = Instant.parse("2026-07-14T15:05:00Z")
+                        .toEpochMilli(),
+                ).size,
+            )
+        }
+
+    @Test
+    fun `five-minute refresh returns compatible derived cache on provider failure`() =
+        runBlocking {
+            val symbol = StockSymbol.of("AAPL")
+            val cached = priceBar(symbol).copy(
+                interval = BarInterval.FIVE_MINUTES,
+                endExclusive = Instant.parse("2026-07-14T15:05:00Z"),
+            )
+            val requestedIntervals = mutableListOf<BarInterval>()
+            val priceBarDao = FakePriceBarDao().apply {
+                upsertAll(listOf(cached.toEntity()))
+            }
+            val repository = RoomMarketRepository(
+                quoteClient = UnusedQuoteClient,
+                chartClient = object : ChartClient {
+                    override suspend fun fetchBars(
+                        symbol: StockSymbol,
+                        exchange: Exchange,
+                        interval: BarInterval,
+                        start: Instant,
+                        endExclusive: Instant,
+                    ): List<PriceBar> {
+                        requestedIntervals += interval
+                        throw IOException("offline")
+                    }
+                },
+                valuationClient = UnusedValuationClient,
+                settingsStore = AlpacaSettingsStore,
+                quoteDao = FakeQuoteDao(),
+                valuationDao = FakeValuationDao(),
+                priceBarDao = priceBarDao,
+                clock = Clock.fixed(
+                    Instant.parse("2026-07-14T15:05:00Z"),
+                    ZoneOffset.UTC,
+                ),
+            )
+
+            val result = repository.refreshBars(
+                symbol = symbol,
+                exchange = Exchange.NASDAQ,
+                interval = BarInterval.FIVE_MINUTES,
+                start = cached.start,
+                endExclusive = cached.endExclusive,
+            )
+
+            assertEquals(listOf(BarInterval.ONE_MINUTE), requestedIntervals)
+            assertTrue(result is RefreshResult.Cached)
+            assertEquals(listOf(cached), result.value)
+        }
+
+    @Test
+    fun `unaligned five-minute refresh reconciles enclosing boundary buckets`() =
+        runBlocking {
+            val symbol = StockSymbol.of("AAPL")
+            val requestedRanges = mutableListOf<Pair<Instant, Instant>>()
+            val oneMinuteBars = (0L..9L).map { minute ->
+                priceBar(symbol).copy(
+                    start = Instant.parse("2026-07-14T15:00:00Z")
+                        .plusSeconds(minute * 60),
+                    endExclusive = Instant.parse("2026-07-14T15:01:00Z")
+                        .plusSeconds(minute * 60),
+                    high = 210.0,
+                    close = 200.0 + minute,
+                )
+            }
+            val staleBoundary = priceBar(symbol).copy(
+                interval = BarInterval.FIVE_MINUTES,
+                endExclusive = Instant.parse("2026-07-14T15:05:00Z"),
+                fetchedAt = Instant.parse("2026-07-14T15:00:30Z"),
+            )
+            val priceBarDao = FakePriceBarDao().apply {
+                upsertAll(listOf(staleBoundary.toEntity()))
+            }
+            val repository = RoomMarketRepository(
+                quoteClient = UnusedQuoteClient,
+                chartClient = object : ChartClient {
+                    override suspend fun fetchBars(
+                        symbol: StockSymbol,
+                        exchange: Exchange,
+                        interval: BarInterval,
+                        start: Instant,
+                        endExclusive: Instant,
+                    ): List<PriceBar> {
+                        requestedRanges += start to endExclusive
+                        return oneMinuteBars
+                    }
+                },
+                valuationClient = UnusedValuationClient,
+                settingsStore = AlpacaSettingsStore,
+                quoteDao = FakeQuoteDao(),
+                valuationDao = FakeValuationDao(),
+                priceBarDao = priceBarDao,
+                clock = Clock.fixed(
+                    Instant.parse("2026-07-14T15:10:00Z"),
+                    ZoneOffset.UTC,
+                ),
+            )
+
+            val result = repository.refreshBars(
+                symbol = symbol,
+                exchange = Exchange.NASDAQ,
+                interval = BarInterval.FIVE_MINUTES,
+                start = Instant.parse("2026-07-14T15:02:00Z"),
+                endExclusive = Instant.parse("2026-07-14T15:10:00Z"),
+            )
+
+            assertEquals(
+                listOf(
+                    Instant.parse("2026-07-14T15:00:00Z") to
+                        Instant.parse("2026-07-14T15:10:00Z"),
+                ),
+                requestedRanges,
+            )
+            assertEquals(1, result.value.size)
+            assertEquals(Instant.parse("2026-07-14T15:05:00Z"), result.value.single().start)
+            val correctedBoundary = priceBarDao.getRange(
+                symbol = symbol.value,
+                exchange = Exchange.NASDAQ.name,
+                interval = BarInterval.FIVE_MINUTES.name,
+                source = DataSource.ALPACA_IEX.name,
+                startEpochMillis = Instant.parse("2026-07-14T15:00:00Z").toEpochMilli(),
+                endExclusiveEpochMillis = Instant.parse("2026-07-14T15:05:00Z")
+                    .toEpochMilli(),
+            ).single().toModel()
+            assertEquals(204.0, correctedBoundary.close, 0.0)
+        }
 
     private fun quote(symbol: StockSymbol): QuoteSnapshot = QuoteSnapshot(
         symbol = symbol,

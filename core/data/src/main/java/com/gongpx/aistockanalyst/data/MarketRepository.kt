@@ -6,6 +6,7 @@ import com.gongpx.aistockanalyst.database.ValuationDao
 import com.gongpx.aistockanalyst.database.toEntity
 import com.gongpx.aistockanalyst.database.toModel
 import com.gongpx.aistockanalyst.datastore.MarketDataSourceSettingsStore
+import com.gongpx.aistockanalyst.domain.PriceBarAggregator
 import com.gongpx.aistockanalyst.model.BarInterval
 import com.gongpx.aistockanalyst.model.ChartProvider
 import com.gongpx.aistockanalyst.model.DataSource
@@ -165,24 +166,28 @@ class RoomMarketRepository(
         require(start < endExclusive) { "Bar range end must be after its start" }
         val source = settingsStore.current().chartProvider.toDataSource()
         return try {
-            val bars = chartClient.fetchBars(
-                symbol = symbol,
-                exchange = exchange,
-                interval = interval,
-                start = start,
-                endExclusive = endExclusive,
-            )
-            if (bars.any { it.source != source }) {
-                throw ChartSourceMismatchException()
+            val bars = if (
+                interval == BarInterval.ONE_MINUTE ||
+                interval == BarInterval.FIVE_MINUTES
+            ) {
+                refreshOneAndFiveMinuteBars(
+                    symbol = symbol,
+                    exchange = exchange,
+                    requestedInterval = interval,
+                    source = source,
+                    start = start,
+                    endExclusive = endExclusive,
+                )
+            } else {
+                refreshProviderBars(
+                    symbol = symbol,
+                    exchange = exchange,
+                    interval = interval,
+                    source = source,
+                    start = start,
+                    endExclusive = endExclusive,
+                )
             }
-            priceBarDao.replaceRange(
-                symbol = symbol.value,
-                exchange = exchange.name,
-                interval = interval.name,
-                startEpochMillis = start.toEpochMilli(),
-                endExclusiveEpochMillis = endExclusive.toEpochMilli(),
-                entities = bars.map(PriceBar::toEntity),
-            )
             RefreshResult.Fresh(bars)
         } catch (failure: IOException) {
             val cached = priceBarDao.getRange(
@@ -201,6 +206,87 @@ class RoomMarketRepository(
                 isStale = true,
                 failureMessage = failure.message ?: "Chart refresh failed",
             )
+        }
+    }
+
+    private suspend fun refreshProviderBars(
+        symbol: StockSymbol,
+        exchange: Exchange,
+        interval: BarInterval,
+        source: DataSource,
+        start: Instant,
+        endExclusive: Instant,
+    ): List<PriceBar> {
+        val bars = chartClient.fetchBars(
+            symbol = symbol,
+            exchange = exchange,
+            interval = interval,
+            start = start,
+            endExclusive = endExclusive,
+        )
+        requireSource(bars, source)
+        priceBarDao.replaceRange(
+            symbol = symbol.value,
+            exchange = exchange.name,
+            interval = interval.name,
+            startEpochMillis = start.toEpochMilli(),
+            endExclusiveEpochMillis = endExclusive.toEpochMilli(),
+            entities = bars.map(PriceBar::toEntity),
+        )
+        return bars
+    }
+
+    private suspend fun refreshOneAndFiveMinuteBars(
+        symbol: StockSymbol,
+        exchange: Exchange,
+        requestedInterval: BarInterval,
+        source: DataSource,
+        start: Instant,
+        endExclusive: Instant,
+    ): List<PriceBar> {
+        val refreshRange = PriceBarAggregator.enclosingFiveMinuteRange(
+            start = start,
+            endExclusive = endExclusive,
+            exchange = exchange,
+        )
+        val oneMinuteBars = chartClient.fetchBars(
+            symbol = symbol,
+            exchange = exchange,
+            interval = BarInterval.ONE_MINUTE,
+            start = refreshRange.start,
+            endExclusive = refreshRange.endExclusive,
+        )
+        requireSource(oneMinuteBars, source)
+        val alignedFiveMinuteBars = PriceBarAggregator.completedFiveMinuteBars(
+            oneMinuteBars = oneMinuteBars,
+            completedAt = clock.instant(),
+        )
+        priceBarDao.replaceOneAndFiveMinuteRanges(
+            symbol = symbol.value,
+            exchange = exchange.name,
+            oneMinuteInterval = BarInterval.ONE_MINUTE.name,
+            fiveMinuteInterval = BarInterval.FIVE_MINUTES.name,
+            startEpochMillis = refreshRange.start.toEpochMilli(),
+            endExclusiveEpochMillis = refreshRange.endExclusive.toEpochMilli(),
+            oneMinuteEntities = oneMinuteBars.map(PriceBar::toEntity),
+            fiveMinuteEntities = alignedFiveMinuteBars.map(PriceBar::toEntity),
+        )
+        val requestedBars = when (requestedInterval) {
+            BarInterval.ONE_MINUTE -> oneMinuteBars
+            BarInterval.FIVE_MINUTES -> alignedFiveMinuteBars
+            else -> error("Only one-minute and five-minute refreshes are coupled")
+        }
+        return requestedBars.filter {
+            !it.start.isBefore(start) && it.endExclusive <= endExclusive
+        }
+    }
+
+    private fun requireSource(
+        bars: List<PriceBar>,
+        source: DataSource,
+    ) {
+        if (bars.any { it.source != source }) {
+            throw ChartSourceMismatchException()
         }
     }
 
