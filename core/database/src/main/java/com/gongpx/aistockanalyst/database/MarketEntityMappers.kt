@@ -1,9 +1,11 @@
 package com.gongpx.aistockanalyst.database
 
 import com.gongpx.aistockanalyst.model.AnalystTargets
+import com.gongpx.aistockanalyst.model.BarInterval
 import com.gongpx.aistockanalyst.model.DataSource
 import com.gongpx.aistockanalyst.model.Exchange
 import com.gongpx.aistockanalyst.model.ParseStatus
+import com.gongpx.aistockanalyst.model.PriceBar
 import com.gongpx.aistockanalyst.model.QuoteSnapshot
 import com.gongpx.aistockanalyst.model.StockSymbol
 import com.gongpx.aistockanalyst.model.ValuationSnapshot
@@ -97,6 +99,38 @@ fun ValuationEntity.toModel(): ValuationSnapshot = ValuationSnapshot(
     asOf = Instant.ofEpochMilli(asOfEpochMillis),
     fetchedAt = Instant.ofEpochMilli(fetchedAtEpochMillis),
     staleAfter = Instant.ofEpochMilli(staleAfterEpochMillis),
+    parseStatus = ParseStatus.valueOf(parseStatus),
+    source = DataSource.valueOf(source),
+)
+
+fun PriceBar.toEntity(): PriceBarEntity = PriceBarEntity(
+    symbol = symbol.value,
+    exchange = exchange.name,
+    interval = interval.name,
+    startEpochMillis = start.toEpochMilli(),
+    endExclusiveEpochMillis = endExclusive.toEpochMilli(),
+    open = open,
+    high = high,
+    low = low,
+    close = close,
+    volume = volume,
+    fetchedAtEpochMillis = fetchedAt.toEpochMilli(),
+    parseStatus = parseStatus.name,
+    source = source.name,
+)
+
+fun PriceBarEntity.toModel(): PriceBar = PriceBar(
+    symbol = StockSymbol.of(symbol),
+    exchange = Exchange.valueOf(exchange),
+    interval = BarInterval.valueOf(interval),
+    start = Instant.ofEpochMilli(startEpochMillis),
+    endExclusive = Instant.ofEpochMilli(endExclusiveEpochMillis),
+    open = open,
+    high = high,
+    low = low,
+    close = close,
+    volume = volume,
+    fetchedAt = Instant.ofEpochMilli(fetchedAtEpochMillis),
     parseStatus = ParseStatus.valueOf(parseStatus),
     source = DataSource.valueOf(source),
 )

@@ -1,11 +1,14 @@
 package com.gongpx.aistockanalyst.data
 
+import com.gongpx.aistockanalyst.database.PriceBarDao
 import com.gongpx.aistockanalyst.database.QuoteDao
 import com.gongpx.aistockanalyst.database.ValuationDao
 import com.gongpx.aistockanalyst.database.toEntity
 import com.gongpx.aistockanalyst.database.toModel
+import com.gongpx.aistockanalyst.model.BarInterval
 import com.gongpx.aistockanalyst.model.Exchange
 import com.gongpx.aistockanalyst.model.ParseStatus
+import com.gongpx.aistockanalyst.model.PriceBar
 import com.gongpx.aistockanalyst.model.QuoteSnapshot
 import com.gongpx.aistockanalyst.model.StockSymbol
 import com.gongpx.aistockanalyst.model.ValuationSnapshot
@@ -38,6 +41,13 @@ interface MarketRepository {
 
     fun observeValuation(symbol: StockSymbol): Flow<ValuationSnapshot?>
 
+    fun observeBars(
+        symbol: StockSymbol,
+        exchange: Exchange,
+        interval: BarInterval,
+        limit: Int,
+    ): Flow<List<PriceBar>>
+
     suspend fun refreshQuote(
         symbol: StockSymbol,
         exchange: Exchange,
@@ -51,6 +61,7 @@ class RoomMarketRepository(
     private val valuationClient: ValuationClient,
     private val quoteDao: QuoteDao,
     private val valuationDao: ValuationDao,
+    private val priceBarDao: PriceBarDao,
     private val clock: Clock,
 ) : MarketRepository {
     override fun observeQuote(
@@ -61,6 +72,21 @@ class RoomMarketRepository(
 
     override fun observeValuation(symbol: StockSymbol): Flow<ValuationSnapshot?> =
         valuationDao.observe(symbol.value).map { it?.toModel() }
+
+    override fun observeBars(
+        symbol: StockSymbol,
+        exchange: Exchange,
+        interval: BarInterval,
+        limit: Int,
+    ): Flow<List<PriceBar>> {
+        require(limit > 0) { "Bar limit must be positive" }
+        return priceBarDao.observeRecent(
+            symbol = symbol.value,
+            exchange = exchange.name,
+            interval = interval.name,
+            limit = limit,
+        ).map { entities -> entities.map { it.toModel() } }
+    }
 
     override suspend fun refreshQuote(
         symbol: StockSymbol,

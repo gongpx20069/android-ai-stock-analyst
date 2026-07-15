@@ -38,9 +38,10 @@ Kotlin/Compose project, four-tab application shell, shared design system,
 market-domain models, user-selectable Tencent/Sina quote routing, an isolated
 Yahoo Finance cookie/crumb valuation client, Room-backed quote and valuation
 caches, DataStore provider settings, and a Hilt-wired repository with explicit
-stale-cache results. Chart bars,
-indicators, screening, ONNX inference, and Azure integration are the next
-delivery slices.
+stale-cache results. The canonical `PriceBar` model, Room v2 bar schema,
+deduplicating DAO, mappings, and observable cache API are ready. A trustworthy
+US-stock chart provider must be selected before ingestion, aggregation,
+indicators, chart UI, screening, or ONNX inference proceeds.
 
 ## Documentation
 

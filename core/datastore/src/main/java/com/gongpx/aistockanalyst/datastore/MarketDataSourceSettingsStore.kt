@@ -82,8 +82,8 @@ class DataStoreMarketDataSourceSettings(
                     ?.let(QuoteProvider::valueOf)
                     ?: QuoteProvider.AUTO,
                 chartProvider = preferences[CHART_PROVIDER]
-                    ?.let(ChartProvider::valueOf)
-                    ?: ChartProvider.TENCENT,
+                    ?.let(::parseChartProvider)
+                    ?: ChartProvider.NOT_CONFIGURED,
                 valuationProvider = preferences[VALUATION_PROVIDER]
                     ?.let(ValuationProvider::valueOf)
                     ?: ValuationProvider.YAHOO_FINANCE,
@@ -100,6 +100,11 @@ class DataStoreMarketDataSourceSettings(
         private val CHART_PROVIDER = stringPreferencesKey("chart_provider")
         private val VALUATION_PROVIDER = stringPreferencesKey("valuation_provider")
     }
+}
+
+private fun parseChartProvider(storedValue: String): ChartProvider = when (storedValue) {
+    "TENCENT" -> ChartProvider.NOT_CONFIGURED
+    else -> ChartProvider.valueOf(storedValue)
 }
 
 class SettingsStorageException(

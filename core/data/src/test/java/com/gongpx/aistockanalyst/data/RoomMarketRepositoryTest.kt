@@ -1,13 +1,15 @@
 package com.gongpx.aistockanalyst.data
 
+import com.gongpx.aistockanalyst.database.PriceBarDao
+import com.gongpx.aistockanalyst.database.PriceBarEntity
 import com.gongpx.aistockanalyst.database.QuoteDao
 import com.gongpx.aistockanalyst.database.QuoteEntity
 import com.gongpx.aistockanalyst.database.ValuationDao
 import com.gongpx.aistockanalyst.database.ValuationEntity
 import com.gongpx.aistockanalyst.database.toEntity
 import com.gongpx.aistockanalyst.database.toModel
-import com.gongpx.aistockanalyst.model.DataSource
 import com.gongpx.aistockanalyst.model.AnalystTargets
+import com.gongpx.aistockanalyst.model.DataSource
 import com.gongpx.aistockanalyst.model.Exchange
 import com.gongpx.aistockanalyst.model.ParseStatus
 import com.gongpx.aistockanalyst.model.QuoteSnapshot
@@ -42,6 +44,7 @@ class RoomMarketRepositoryTest {
             valuationClient = UnusedValuationClient,
             quoteDao = quoteDao,
             valuationDao = FakeValuationDao(),
+            priceBarDao = FakePriceBarDao(),
             clock = Clock.fixed(
                 Instant.parse("2026-07-14T15:05:00Z"),
                 ZoneOffset.UTC,
@@ -71,6 +74,7 @@ class RoomMarketRepositoryTest {
             },
             quoteDao = FakeQuoteDao(),
             valuationDao = valuationDao,
+            priceBarDao = FakePriceBarDao(),
             clock = Clock.fixed(
                 Instant.parse("2026-07-14T15:05:00Z"),
                 ZoneOffset.UTC,
@@ -133,6 +137,7 @@ class RoomMarketRepositoryTest {
         parseStatus = parseStatus,
         source = DataSource.YAHOO_FINANCE,
     )
+
 }
 
 private class FakeQuoteDao(initial: QuoteEntity? = null) : QuoteDao {
@@ -162,6 +167,41 @@ private class FakeValuationDao(initial: ValuationEntity? = null) : ValuationDao 
 
     override suspend fun upsert(entity: ValuationEntity) {
         state.value = entity
+    }
+}
+
+private class FakePriceBarDao : PriceBarDao {
+    private val state = MutableStateFlow<List<PriceBarEntity>>(emptyList())
+
+    override fun observeRecent(
+        symbol: String,
+        exchange: String,
+        interval: String,
+        limit: Int,
+    ): Flow<List<PriceBarEntity>> = state
+
+    override suspend fun getRecent(
+        symbol: String,
+        exchange: String,
+        interval: String,
+        limit: Int,
+    ): List<PriceBarEntity> = state.value
+        .filter {
+            it.symbol == symbol &&
+                it.exchange == exchange &&
+                it.interval == interval
+        }
+        .sortedByDescending(PriceBarEntity::startEpochMillis)
+        .take(limit)
+        .sortedBy(PriceBarEntity::startEpochMillis)
+
+    override suspend fun upsertAll(entities: List<PriceBarEntity>) {
+        state.value = (state.value + entities)
+            .associateBy {
+                listOf(it.symbol, it.exchange, it.interval, it.startEpochMillis)
+            }
+            .values
+            .toList()
     }
 }
 

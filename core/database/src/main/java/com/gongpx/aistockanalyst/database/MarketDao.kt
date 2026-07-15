@@ -58,3 +58,49 @@ interface ValuationDao {
     @Upsert
     suspend fun upsert(entity: ValuationEntity)
 }
+
+@Dao
+interface PriceBarDao {
+    @Query(
+        """
+        SELECT * FROM (
+            SELECT * FROM price_bars
+            WHERE symbol = :symbol
+                AND exchange = :exchange
+                AND interval = :interval
+            ORDER BY startEpochMillis DESC
+            LIMIT :limit
+        )
+        ORDER BY startEpochMillis ASC
+        """,
+    )
+    fun observeRecent(
+        symbol: String,
+        exchange: String,
+        interval: String,
+        limit: Int,
+    ): Flow<List<PriceBarEntity>>
+
+    @Query(
+        """
+        SELECT * FROM (
+            SELECT * FROM price_bars
+            WHERE symbol = :symbol
+                AND exchange = :exchange
+                AND interval = :interval
+            ORDER BY startEpochMillis DESC
+            LIMIT :limit
+        )
+        ORDER BY startEpochMillis ASC
+        """,
+    )
+    suspend fun getRecent(
+        symbol: String,
+        exchange: String,
+        interval: String,
+        limit: Int,
+    ): List<PriceBarEntity>
+
+    @Upsert
+    suspend fun upsertAll(entities: List<PriceBarEntity>)
+}

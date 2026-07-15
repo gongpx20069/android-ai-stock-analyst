@@ -212,7 +212,7 @@ Arbiter card
 
 - Independent market-data provider selectors:
   - Quotes: Auto (Tencent then Sina), Tencent-only, or Sina-only
-  - Charts: Tencent in the current implementation
+  - Charts: not configured until a trustworthy US OHLCV provider is validated
   - Valuation: Yahoo Finance in the current implementation
 - Provider choices persist locally. Explicit quote-provider modes surface
   failure and stale-cache state instead of silently switching providers.
@@ -332,7 +332,7 @@ ML-specific charts and the prediction contract remain owned by
 | Analyst range card | `targetLowPrice`, `targetMedianPrice`, `targetHighPrice`, `numberOfAnalystOpinions`, freshness | Normalized fundamental snapshot |
 | AI forecast summary card | `horizonOutlooks`, confidence, evidence, watch conditions | Validated arbiter output from [`ai-prompt.md`](ai-prompt.md) |
 | Forward P/E comparison | `forwardPE` | Fundamental snapshot |
-| Live market chart | Intraday and higher-timeframe OHLCV, volume, and optional `30m` probability line | Tencent chart endpoints in [`data-sources.md` §2.3](data-sources.md#23-tencent-chart-endpoints-and-5-minute-aggregation) plus local prediction snapshots from [`analysis.md` §4.3](analysis.md#43-live-inference-and-visualization-contract) |
+| Live market chart | Intraday and higher-timeframe OHLCV, volume, and optional `30m` probability line | Validated chart provider (not yet configured; rejected Tencent endpoints are recorded in [`data-sources.md` §2.3](data-sources.md#23-tencent-chart-endpoints-and-5-minute-aggregation)) plus local prediction snapshots from [`analysis.md` §4.3](analysis.md#43-live-inference-and-visualization-contract) |
 | LightGBM probability line | `probabilityUp`, `asOf`, `horizon`, `modelVersion` | Local prediction snapshots from [`analysis.md` §4.3](analysis.md#43-live-inference-and-visualization-contract) |
 
 ---

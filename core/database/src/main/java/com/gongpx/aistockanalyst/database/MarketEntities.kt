@@ -54,3 +54,23 @@ data class ValuationEntity(
     val parseStatus: String,
     val source: String,
 )
+
+@Entity(
+    tableName = "price_bars",
+    primaryKeys = ["symbol", "exchange", "interval", "startEpochMillis"],
+)
+data class PriceBarEntity(
+    val symbol: String,
+    val exchange: String,
+    val interval: String,
+    val startEpochMillis: Long,
+    val endExclusiveEpochMillis: Long,
+    val open: Double,
+    val high: Double,
+    val low: Double,
+    val close: Double,
+    val volume: Long,
+    val fetchedAtEpochMillis: Long,
+    val parseStatus: String,
+    val source: String,
+)

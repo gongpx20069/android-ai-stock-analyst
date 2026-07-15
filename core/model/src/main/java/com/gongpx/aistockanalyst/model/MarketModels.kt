@@ -43,7 +43,7 @@ enum class QuoteProvider {
 }
 
 enum class ChartProvider {
-    TENCENT,
+    NOT_CONFIGURED,
 }
 
 enum class ValuationProvider {
@@ -52,7 +52,7 @@ enum class ValuationProvider {
 
 data class MarketDataSourceSettings(
     val quoteProvider: QuoteProvider = QuoteProvider.AUTO,
-    val chartProvider: ChartProvider = ChartProvider.TENCENT,
+    val chartProvider: ChartProvider = ChartProvider.NOT_CONFIGURED,
     val valuationProvider: ValuationProvider = ValuationProvider.YAHOO_FINANCE,
 )
 
@@ -192,6 +192,7 @@ enum class BarInterval(val duration: Duration?) {
 
 data class PriceBar(
     val symbol: StockSymbol,
+    val exchange: Exchange,
     val interval: BarInterval,
     val start: Instant,
     val endExclusive: Instant,
@@ -200,6 +201,9 @@ data class PriceBar(
     val low: Double,
     val close: Double,
     val volume: Long,
+    val fetchedAt: Instant,
+    val parseStatus: ParseStatus = ParseStatus.VALID,
+    val source: DataSource,
 ) {
     init {
         require(start < endExclusive) { "Bar end must be after its start" }

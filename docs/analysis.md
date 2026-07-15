@@ -110,7 +110,8 @@ The main UI summary is a pair of numeric cards:
 
 ```text
 [Android provider clients]
-  ├─ Tencent / Sina -> quotes and OHLCV
+  ├─ Tencent / Sina -> quotes
+  ├─ Validated chart provider -> OHLCV (not yet configured)
   └─ Yahoo Finance -> valuation and analyst snapshot
         ▼
 [Room repositories]

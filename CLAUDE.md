@@ -49,7 +49,7 @@ Update the owner document instead of duplicating detailed rules elsewhere.
 | [`settings.gradle.kts`](settings.gradle.kts) and [`gradle/libs.versions.toml`](gradle/libs.versions.toml) | Module graph, repositories, plugins, and dependency versions |
 | [`app/`](app/) | Android application, four-tab Compose shell, resources, and Hilt dependency graph |
 | [`core/data/`](core/data/) | Local-first market repository, refresh results, and stale-cache behavior |
-| [`core/database/`](core/database/) | Room entities, DAOs, schema, and market-model mappings |
+| [`core/database/`](core/database/) | Room entities, DAOs, schema, market-model mappings, and canonical bar history |
 | [`core/datastore/`](core/datastore/) | Independent quote, chart, and valuation provider preferences |
 | [`core/model/`](core/model/) | Canonical symbols, exchanges, quotes, bars, valuation snapshots, and predictions |
 | [`core/domain/`](core/domain/) | Deterministic calculations and exchange/device-time conversion |

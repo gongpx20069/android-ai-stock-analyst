@@ -9,6 +9,7 @@ import com.gongpx.aistockanalyst.data.MarketRepository
 import com.gongpx.aistockanalyst.data.RoomMarketRepository
 import com.gongpx.aistockanalyst.data.UserSelectedQuoteClient
 import com.gongpx.aistockanalyst.database.MarketDatabase
+import com.gongpx.aistockanalyst.database.PriceBarDao
 import com.gongpx.aistockanalyst.database.QuoteDao
 import com.gongpx.aistockanalyst.database.ValuationDao
 import com.gongpx.aistockanalyst.datastore.DataStoreMarketDataSourceSettings
@@ -136,18 +137,24 @@ object MarketDataModule {
         database.valuationDao()
 
     @Provides
+    fun providePriceBarDao(database: MarketDatabase): PriceBarDao =
+        database.priceBarDao()
+
+    @Provides
     @Singleton
     fun provideMarketRepository(
         quoteClient: QuoteClient,
         valuationClient: ValuationClient,
         quoteDao: QuoteDao,
         valuationDao: ValuationDao,
+        priceBarDao: PriceBarDao,
         clock: Clock,
     ): MarketRepository = RoomMarketRepository(
         quoteClient = quoteClient,
         valuationClient = valuationClient,
         quoteDao = quoteDao,
         valuationDao = valuationDao,
+        priceBarDao = priceBarDao,
         clock = clock,
     )
 }

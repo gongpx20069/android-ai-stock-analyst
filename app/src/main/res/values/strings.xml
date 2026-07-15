@@ -29,6 +29,7 @@
     <string name="provider_tencent">Tencent</string>
     <string name="provider_sina">Sina</string>
     <string name="provider_yahoo_finance">Yahoo Finance</string>
+    <string name="provider_not_configured">Not configured</string>
     <string name="settings_reset_data_sources">Reset data source settings</string>
     <string name="settings_azure">Azure OpenAI BYOK</string>
     <string name="settings_azure_body">Endpoint, key, deployment, and API version will be encrypted and stored on this device.</string>

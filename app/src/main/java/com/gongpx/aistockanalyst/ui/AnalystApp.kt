@@ -225,7 +225,7 @@ private fun SettingsScreen(
                 title = stringResource(R.string.settings_chart_provider),
                 options = ChartProvider.entries,
                 selected = settingsState.dataSources.chartProvider,
-                label = { stringResource(R.string.provider_tencent) },
+                label = { stringResource(R.string.provider_not_configured) },
                 onSelected = onChartProviderSelected,
             )
             Spacer(Modifier.height(AppSpacing.medium))

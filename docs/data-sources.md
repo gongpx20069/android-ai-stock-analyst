@@ -14,7 +14,7 @@
 | Responsibility | Selected source | Notes |
 |---|---|---|
 | Live quote snapshot | User choice: Auto, Tencent, or Sina | Auto uses Tencent first and Sina only on failure; explicit choices never switch silently |
-| Intraday and higher-timeframe OHLCV | Independently selected chart provider; Tencent currently available | Powers live charts, local bar aggregation, and feature generation |
+| Intraday and higher-timeframe OHLCV | Not configured pending provider validation | Canonical Room storage is ready; no unverified endpoint is activated |
 | Screening universe | Nasdaq public screener | Operating-company securities listed on NASDAQ, NYSE, and NYSE American |
 | Fundamental and analyst snapshot | Independently selected valuation provider; Yahoo Finance currently available | Direct HTTP `quoteSummary` is unofficial and revocable; cached locally in Room |
 | Derived indicators | Local Kotlin calculation engine | Deterministic indicators are calculated on-device |
@@ -27,8 +27,8 @@ local storage. No project server exists between the app and these providers.
 Provider choices are separate settings rather than one global source:
 
 - Quotes: `Auto` (default), Tencent-only, or Sina-only.
-- Charts: Tencent is the only implemented option; the setting is independent
-  so another chart client can be added without changing quote behavior.
+- Charts: no provider is currently configured. The setting remains independent
+  so a validated chart client can be added without changing quote behavior.
 - Valuation: Yahoo Finance is the only implemented option; the setting is
   independent so valuation availability never controls quote or chart refresh.
 
@@ -78,7 +78,7 @@ Sina may be selected directly. In `Auto` quote mode it is used only when
 Tencent fails, times out, or returns an invalid payload.
 
 <a id="23-tencent-chart-endpoints-and-5-minute-aggregation"></a>
-### 2.3 Tencent chart endpoints and 5-minute aggregation
+### 2.3 Rejected Tencent chart endpoints and 5-minute requirement
 
 - Same-day intraday line:
   `GET https://web.ifzq.gtimg.cn/appstock/app/minute/query?code=usAAPL`
@@ -89,6 +89,15 @@ Tencent fails, times out, or returns an invalid payload.
 - Four-hour candles are aggregated locally from completed 1-hour bars using
   exchange-time session boundaries.
 
+Live verification found that `minute/query` exposes minute price plus
+cumulative volume, not complete minute OHLC. The undocumented `m1` and `m5`
+queries also returned date-only day aggregates during verification. They are
+not activated as OHLC sources. Tencent's nominal `m15 / m30 / m60` queries
+returned the same date-only session aggregate, while daily/monthly queries did
+not return trustworthy recent US history. Tencent is therefore quote-only.
+A validated chart provider contract is required before any bar ingestion or
+local 5-minute aggregation can be implemented honestly.
+
 For the MVP, the Android app must build **completed 5-minute bars** locally by
 aggregating verified 1-minute data in exchange time. Re-check any undocumented
 direct `m5` endpoint before release; if it proves stable, it may be used as a
@@ -96,7 +105,7 @@ replenishment or fallback source, not as an unverified assumption.
 
 Implementation requirements:
 
-- Persist bars by `(symbol, barStart)`
+- Persist bars by `(symbol, exchange, interval, barStart)`
 - Deduplicate source overlap
 - Never use an unfinished bar as a model label or inference input
 - Normalize timestamps according to the canonical symbol and exchange-time model
@@ -224,7 +233,7 @@ reuse the same canonical bar set.
       direct Android client; do not leak provider quirks into UI code.
 - [x] Normalize quote timestamps using the canonical exchange-time model from
       [`architecture.md`](architecture.md).
-- [ ] Normalize candle timestamps after historical bar ingestion is added.
+- [ ] Select and validate a US OHLCV provider for every promised timeframe.
 - [x] Record `source`, `fetchedAt`, parse status, and `staleAfter` for normalized
       quote and fundamental snapshots.
 - [x] Distinguish quote freshness from fundamental freshness in local models and
@@ -233,6 +242,8 @@ reuse the same canonical bar set.
       valuation refresh fails.
 - [ ] Build completed 5-minute bars locally and never infer from unfinished
       bars.
+- [x] Define canonical bar persistence with source, fetch time, parse status,
+      interval, and exchange metadata; deduplicate by the Room primary key.
 - [ ] Persist screening progress, page cursors, and stage markers so background
       refreshes can resume cleanly.
 - [ ] Revalidate undocumented endpoints, headers, response shapes, and practical
