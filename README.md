@@ -45,8 +45,10 @@ disclosure. Its paginated split-adjusted bars now flow into the canonical
 locally from exchange-time-aligned 1-minute IEX bars and persisted atomically
 with their source range. The local domain layer now calculates MA50, MA200, and
 Wilder RSI(14) from completed valid daily bars and exposes a freshness-aware
-snapshot through the repository. Chart UI, support/resistance, screening, and
-ONNX inference remain to be implemented.
+snapshot through the repository. The same normalized history now drives
+52-week positioning plus pivot, swing, Fibonacci, moving-average, and
+52-week support/resistance levels with cross-method resonance. Chart UI,
+screening, and ONNX inference remain to be implemented.
 
 ## Documentation
 

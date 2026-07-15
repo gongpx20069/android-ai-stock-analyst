@@ -7,6 +7,7 @@ import com.gongpx.aistockanalyst.database.toEntity
 import com.gongpx.aistockanalyst.database.toModel
 import com.gongpx.aistockanalyst.datastore.MarketDataSourceSettingsStore
 import com.gongpx.aistockanalyst.domain.PriceBarAggregator
+import com.gongpx.aistockanalyst.domain.PriceLevelCalculator
 import com.gongpx.aistockanalyst.domain.TechnicalIndicatorCalculator
 import com.gongpx.aistockanalyst.model.BarInterval
 import com.gongpx.aistockanalyst.model.ChartProvider
@@ -14,6 +15,7 @@ import com.gongpx.aistockanalyst.model.DataSource
 import com.gongpx.aistockanalyst.model.Exchange
 import com.gongpx.aistockanalyst.model.ParseStatus
 import com.gongpx.aistockanalyst.model.PriceBar
+import com.gongpx.aistockanalyst.model.PriceLevelSnapshot
 import com.gongpx.aistockanalyst.model.QuoteSnapshot
 import com.gongpx.aistockanalyst.model.StockSymbol
 import com.gongpx.aistockanalyst.model.TechnicalIndicatorSnapshot
@@ -61,6 +63,11 @@ interface MarketRepository {
         symbol: StockSymbol,
         exchange: Exchange,
     ): Flow<TechnicalIndicatorSnapshot?>
+
+    fun observePriceLevels(
+        symbol: StockSymbol,
+        exchange: Exchange,
+    ): Flow<PriceLevelSnapshot?>
 
     suspend fun refreshQuote(
         symbol: StockSymbol,
@@ -136,6 +143,35 @@ class RoomMarketRepository(
                     dailyBars = entities.map { it.toModel() },
                     calculatedAt = clock.instant(),
                 )
+            }
+        }
+    }
+
+    override fun observePriceLevels(
+        symbol: StockSymbol,
+        exchange: Exchange,
+    ): Flow<PriceLevelSnapshot?> {
+        val dailyBars = priceBarDao.observeHistory(
+            symbol = symbol.value,
+            exchange = exchange.name,
+            interval = BarInterval.ONE_DAY.name,
+            source = DataSource.ALPACA_IEX.name,
+        )
+        val quote = quoteDao.observe(symbol.value, exchange.name)
+        return combine(
+            settingsStore.settings,
+            dailyBars,
+            quote,
+        ) { settings, entities, quoteEntity ->
+            when (settings.chartProvider) {
+                ChartProvider.NOT_CONFIGURED -> null
+                ChartProvider.ALPACA_IEX -> quoteEntity?.let {
+                    PriceLevelCalculator.calculateDaily(
+                        dailyBars = entities.map { entity -> entity.toModel() },
+                        quote = it.toModel(),
+                        calculatedAt = clock.instant(),
+                    )
+                }
             }
         }
     }

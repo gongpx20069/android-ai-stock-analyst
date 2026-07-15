@@ -1,7 +1,5 @@
 package com.gongpx.aistockanalyst.domain
 
-import com.gongpx.aistockanalyst.model.BarInterval
-import com.gongpx.aistockanalyst.model.ParseStatus
 import com.gongpx.aistockanalyst.model.PriceBar
 import com.gongpx.aistockanalyst.model.TechnicalIndicatorSnapshot
 import java.time.Duration
@@ -15,16 +13,7 @@ object TechnicalIndicatorCalculator {
         if (dailyBars.isEmpty()) {
             return null
         }
-        validateInput(dailyBars)
-        val completedBars = dailyBars
-            .groupBy(PriceBar::start)
-            .values
-            .map { versions -> versions.maxBy(PriceBar::fetchedAt) }
-            .filter {
-                it.parseStatus == ParseStatus.VALID &&
-                    it.isCompletedAt(calculatedAt)
-            }
-            .sortedBy(PriceBar::start)
+        val completedBars = normalizedCompletedDailyBars(dailyBars, calculatedAt)
         if (completedBars.isEmpty()) {
             return null
         }
@@ -44,21 +33,6 @@ object TechnicalIndicatorCalculator {
             staleAfter = latest.fetchedAt.plus(DAILY_DATA_TTL),
             barSource = latest.source,
         )
-    }
-
-    private fun validateInput(bars: List<PriceBar>) {
-        val first = bars.first()
-        bars.forEach { bar ->
-            require(bar.interval == BarInterval.ONE_DAY) {
-                "Technical indicators require daily bars"
-            }
-            require(bar.symbol == first.symbol && bar.exchange == first.exchange) {
-                "Daily bars must share a symbol and exchange"
-            }
-            require(bar.source == first.source) {
-                "Daily bars must share a data source"
-            }
-        }
     }
 
     private fun List<Double>.simpleMovingAverage(period: Int): Double? {

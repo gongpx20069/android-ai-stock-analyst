@@ -475,6 +475,52 @@ class RoomMarketRepositoryTest {
             assertEquals(DataSource.LOCAL_CALCULATION, snapshot.source)
         }
 
+    @Test
+    fun `repository combines cached quote and daily history into price levels`() =
+        runBlocking {
+            val symbol = StockSymbol.of("AAPL")
+            val daily = PriceBar(
+                symbol = symbol,
+                exchange = Exchange.NASDAQ,
+                interval = BarInterval.ONE_DAY,
+                start = Instant.parse("2026-07-13T04:00:00Z"),
+                endExclusive = Instant.parse("2026-07-14T04:00:00Z"),
+                open = 195.0,
+                high = 210.0,
+                low = 190.0,
+                close = 200.0,
+                volume = 1_000,
+                fetchedAt = Instant.parse("2026-07-14T15:00:05Z"),
+                source = DataSource.ALPACA_IEX,
+            )
+            val priceBarDao = FakePriceBarDao().apply {
+                upsertAll(listOf(daily.toEntity()))
+            }
+            val repository = RoomMarketRepository(
+                quoteClient = UnusedQuoteClient,
+                chartClient = UnusedChartClient,
+                valuationClient = UnusedValuationClient,
+                settingsStore = AlpacaSettingsStore,
+                quoteDao = FakeQuoteDao(quote(symbol).toEntity()),
+                valuationDao = FakeValuationDao(),
+                priceBarDao = priceBarDao,
+                clock = Clock.fixed(
+                    Instant.parse("2026-07-15T20:00:00Z"),
+                    ZoneOffset.UTC,
+                ),
+            )
+
+            val snapshot = repository.observePriceLevels(
+                symbol = symbol,
+                exchange = Exchange.NASDAQ,
+            ).first()!!
+
+            assertEquals(200.0, snapshot.currentPrice, 0.0)
+            assertEquals(DataSource.TENCENT, snapshot.quoteSource)
+            assertEquals(DataSource.ALPACA_IEX, snapshot.barSource)
+            assertTrue(snapshot.levels.isNotEmpty())
+        }
+
     private fun quote(symbol: StockSymbol): QuoteSnapshot = QuoteSnapshot(
         symbol = symbol,
         exchange = Exchange.NASDAQ,

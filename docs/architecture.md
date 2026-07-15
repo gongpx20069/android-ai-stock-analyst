@@ -193,7 +193,7 @@ metrics. For the full contract, see
 | [`../core/database/`](../core/database/) | Room cache, DAOs, schema, and model mappings | Implemented quote, valuation, and bar-history slices |
 | [`../core/datastore/`](../core/datastore/) | Provider preferences and Android-Keystore-backed Alpaca credentials | Implemented |
 | [`../core/model/`](../core/model/) | Canonical market-domain models | Implemented foundation |
-| [`../core/domain/`](../core/domain/) | Deterministic valuation, time, completed five-minute aggregation, MA50/200, and Wilder RSI(14) | Implemented foundation |
+| [`../core/domain/`](../core/domain/) | Deterministic valuation, time, completed five-minute aggregation, MA50/200, Wilder RSI(14), 52-week positioning, and support/resistance | Implemented foundation |
 | [`../core/designsystem/`](../core/designsystem/) | Compose design tokens and theme | Implemented foundation |
 | [`../core/network/`](../core/network/) | Direct quote, Alpaca IEX chart, and valuation clients | Implemented quote/valuation/chart ingestion slices |
 
@@ -205,7 +205,9 @@ cache API, and opt-in Alpaca Basic ingestion with encrypted BYOK credentials.
 Completed local 5-minute aggregation and atomic source/derived persistence are
 implemented. MA50, MA200, and Wilder RSI(14) are calculated locally from the
 complete cached daily history and exposed as a freshness-aware repository
-snapshot. Support/resistance and chart presentation remain.
+snapshot. The same history plus the current quote now produces 52-week
+positioning and four-method support/resistance with resonance and nearest-level
+distances. Chart presentation remains.
 
 1. Create the Kotlin/Compose Android skeleton with the locked local-only
    module boundaries.

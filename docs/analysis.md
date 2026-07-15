@@ -92,6 +92,34 @@ Median target: separate valuation reference, not a support/resistance level
 The main UI summary is a pair of numeric cards:
 `distance to nearest support` and `distance to nearest resistance`.
 
+Implemented level contract:
+
+- Use the current cached quote as the reference price and only valid,
+  completed, split-adjusted daily bars from the selected chart source.
+- Classic pivots use the latest completed daily candle and the exact
+  `PP / R1-R3 / S1-S3` formulas above.
+- Swing highs and lows use the latest 120 completed bars. A candidate must
+  equal the maximum high or minimum low in a centered five-bar window with two
+  bars on each side; edge candidates remain unconfirmed.
+- A 52-week window requires 252 completed bars. Before that full window
+  exists, 52-week position, 52-week levels, and Fibonacci levels remain
+  unavailable rather than being labeled from partial history.
+- Fibonacci uses the 252-bar high and low with `23.6% / 38.2% / 50% / 61.8%`
+  retracements. MA50 and MA200 reuse the technical-indicator calculation.
+- Raw levels within `0.5%` relative distance are clustered. The displayed
+  value is the cluster median, and resonance is true only when the cluster
+  contains at least two distinct methods.
+- A level within `0.1%` of the current quote is classified as `AT_PRICE`;
+  lower levels are support and higher levels are resistance. Distance is the
+  absolute fractional difference from the current quote.
+- Nearest support is the highest support below current price; nearest
+  resistance is the lowest resistance above it.
+- 52-week position is `(current - low) / (high - low)`, clamped to `[0, 1]`.
+  It is unavailable when the annual range is flat.
+- The local snapshot retains quote and daily timestamps, both provider
+  sources, the least-fresh required fetch time, and the earlier of quote or
+  daily-cache expiration.
+
 <a id="13-technicals-as-a-supporting-role"></a>
 ### 1.3 Technicals as a supporting role
 

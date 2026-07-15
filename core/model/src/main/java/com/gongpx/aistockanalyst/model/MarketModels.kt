@@ -250,6 +250,125 @@ data class TechnicalIndicatorSnapshot(
     fun isStaleAt(now: Instant): Boolean = !now.isBefore(staleAfter)
 }
 
+enum class PriceLevelMethod {
+    PIVOT,
+    SWING,
+    FIBONACCI,
+    MOVING_AVERAGE,
+    FIFTY_TWO_WEEK,
+}
+
+enum class PriceLevelLabel(
+    val method: PriceLevelMethod,
+) {
+    PIVOT_POINT(PriceLevelMethod.PIVOT),
+    PIVOT_R1(PriceLevelMethod.PIVOT),
+    PIVOT_R2(PriceLevelMethod.PIVOT),
+    PIVOT_R3(PriceLevelMethod.PIVOT),
+    PIVOT_S1(PriceLevelMethod.PIVOT),
+    PIVOT_S2(PriceLevelMethod.PIVOT),
+    PIVOT_S3(PriceLevelMethod.PIVOT),
+    SWING_HIGH(PriceLevelMethod.SWING),
+    SWING_LOW(PriceLevelMethod.SWING),
+    FIBONACCI_23_6(PriceLevelMethod.FIBONACCI),
+    FIBONACCI_38_2(PriceLevelMethod.FIBONACCI),
+    FIBONACCI_50_0(PriceLevelMethod.FIBONACCI),
+    FIBONACCI_61_8(PriceLevelMethod.FIBONACCI),
+    MA50(PriceLevelMethod.MOVING_AVERAGE),
+    MA200(PriceLevelMethod.MOVING_AVERAGE),
+    FIFTY_TWO_WEEK_HIGH(PriceLevelMethod.FIFTY_TWO_WEEK),
+    FIFTY_TWO_WEEK_LOW(PriceLevelMethod.FIFTY_TWO_WEEK),
+}
+
+enum class PriceLevelKind {
+    SUPPORT,
+    AT_PRICE,
+    RESISTANCE,
+}
+
+data class PriceLevel(
+    val value: Double,
+    val kind: PriceLevelKind,
+    val distanceFraction: Double,
+    val labels: Set<PriceLevelLabel>,
+) {
+    val methods: Set<PriceLevelMethod> = labels.mapTo(mutableSetOf()) { it.method }
+    val isResonant: Boolean = methods.size >= 2
+
+    init {
+        require(value > 0.0 && value.isFinite()) { "Price level must be positive" }
+        require(distanceFraction >= 0.0 && distanceFraction.isFinite()) {
+            "Price-level distance must be non-negative"
+        }
+        require(labels.isNotEmpty()) { "Price level requires at least one label" }
+    }
+}
+
+data class PriceLevelSnapshot(
+    val symbol: StockSymbol,
+    val exchange: Exchange,
+    val currentPrice: Double,
+    val dailyBarCount: Int,
+    val referenceAsOf: Instant,
+    val dailyAsOf: Instant,
+    val calculatedAt: Instant,
+    val dataFetchedAt: Instant,
+    val staleAfter: Instant,
+    val fiftyTwoWeekLow: Double?,
+    val fiftyTwoWeekHigh: Double?,
+    val fiftyTwoWeekPosition: Double?,
+    val levels: List<PriceLevel>,
+    val nearestSupport: PriceLevel?,
+    val nearestResistance: PriceLevel?,
+    val quoteSource: DataSource,
+    val barSource: DataSource,
+    val source: DataSource = DataSource.LOCAL_CALCULATION,
+) {
+    init {
+        require(currentPrice > 0.0) { "Current price must be positive" }
+        require(dailyBarCount > 0) { "Price levels require daily history" }
+        require((fiftyTwoWeekLow == null) == (fiftyTwoWeekHigh == null)) {
+            "52-week high and low must be available together"
+        }
+        require(fiftyTwoWeekLow == null || fiftyTwoWeekLow > 0.0) {
+            "52-week low must be positive when present"
+        }
+        require(
+            fiftyTwoWeekLow == null ||
+                fiftyTwoWeekHigh == null ||
+                fiftyTwoWeekHigh >= fiftyTwoWeekLow,
+        ) {
+            "52-week high cannot be below the 52-week low"
+        }
+        require(fiftyTwoWeekPosition == null || fiftyTwoWeekPosition in 0.0..1.0) {
+            "52-week position must be between 0 and 1 when present"
+        }
+        require(fiftyTwoWeekLow != null || fiftyTwoWeekPosition == null) {
+            "52-week position requires a complete 52-week range"
+        }
+        require(!staleAfter.isBefore(dataFetchedAt)) {
+            "Price-level stale time cannot precede fetch time"
+        }
+        require(levels.zipWithNext().all { (left, right) -> left.value <= right.value }) {
+            "Price levels must be sorted"
+        }
+        require(nearestSupport == null || nearestSupport.kind == PriceLevelKind.SUPPORT) {
+            "Nearest support must be a support level"
+        }
+        require(
+            nearestResistance == null ||
+                nearestResistance.kind == PriceLevelKind.RESISTANCE,
+        ) {
+            "Nearest resistance must be a resistance level"
+        }
+        require(source == DataSource.LOCAL_CALCULATION) {
+            "Price levels must be calculated locally"
+        }
+    }
+
+    fun isStaleAt(now: Instant): Boolean = !now.isBefore(staleAfter)
+}
+
 enum class PredictionHorizon {
     THIRTY_MINUTES,
     FIVE_TRADING_DAYS,

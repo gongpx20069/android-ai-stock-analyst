@@ -317,6 +317,11 @@ provider facts. Their normalized snapshot records the latest daily-bar
 `fetchedAt` and becomes cache-stale after 24 hours without a fresher daily-bar
 refresh.
 
+Support/resistance and 52-week positioning are also calculated on demand from
+the complete normalized daily history, combined with the cached current quote.
+They remain local calculation results rather than provider facts and retain
+both quote and bar provenance plus the earlier freshness deadline.
+
 ### 4.3 Implementation checklist
 
 - [x] Map Tencent and Sina fields explicitly by positional index; do not rely on
