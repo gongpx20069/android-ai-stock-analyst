@@ -31,6 +31,8 @@ import java.time.Instant
 import java.time.ZoneOffset
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -425,6 +427,54 @@ class RoomMarketRepositoryTest {
             assertEquals(204.0, correctedBoundary.close, 0.0)
         }
 
+    @Test
+    fun `repository calculates technical indicators from cached daily history`() =
+        runBlocking {
+            val symbol = StockSymbol.of("AAPL")
+            val base = Instant.parse("2026-01-01T05:00:00Z")
+            val dailyBars = (1L..15L).map { day ->
+                PriceBar(
+                    symbol = symbol,
+                    exchange = Exchange.NASDAQ,
+                    interval = BarInterval.ONE_DAY,
+                    start = base.plusSeconds(day * 86_400),
+                    endExclusive = base.plusSeconds((day + 1) * 86_400),
+                    open = day.toDouble(),
+                    high = day.toDouble(),
+                    low = day.toDouble(),
+                    close = day.toDouble(),
+                    volume = 1_000,
+                    fetchedAt = Instant.parse("2026-07-14T15:00:00Z"),
+                    source = DataSource.ALPACA_IEX,
+                )
+            }
+            val priceBarDao = FakePriceBarDao().apply {
+                upsertAll(dailyBars.map(PriceBar::toEntity))
+            }
+            val repository = RoomMarketRepository(
+                quoteClient = UnusedQuoteClient,
+                chartClient = UnusedChartClient,
+                valuationClient = UnusedValuationClient,
+                settingsStore = AlpacaSettingsStore,
+                quoteDao = FakeQuoteDao(),
+                valuationDao = FakeValuationDao(),
+                priceBarDao = priceBarDao,
+                clock = Clock.fixed(
+                    Instant.parse("2026-07-15T20:00:00Z"),
+                    ZoneOffset.UTC,
+                ),
+            )
+
+            val snapshot = repository.observeTechnicalIndicators(
+                symbol = symbol,
+                exchange = Exchange.NASDAQ,
+            ).first()!!
+
+            assertEquals(15, snapshot.closeCount)
+            assertEquals(100.0, snapshot.rsi14!!, 0.0)
+            assertEquals(DataSource.LOCAL_CALCULATION, snapshot.source)
+        }
+
     private fun quote(symbol: StockSymbol): QuoteSnapshot = QuoteSnapshot(
         symbol = symbol,
         exchange = Exchange.NASDAQ,
@@ -524,6 +574,22 @@ private class FakeValuationDao(initial: ValuationEntity? = null) : ValuationDao 
 
 private class FakePriceBarDao : PriceBarDao {
     private val state = MutableStateFlow<List<PriceBarEntity>>(emptyList())
+
+    override fun observeHistory(
+        symbol: String,
+        exchange: String,
+        interval: String,
+        source: String,
+    ): Flow<List<PriceBarEntity>> = state.map { entities ->
+        entities
+            .filter {
+                it.symbol == symbol &&
+                    it.exchange == exchange &&
+                    it.interval == interval &&
+                    it.source == source
+            }
+            .sortedBy(PriceBarEntity::startEpochMillis)
+    }
 
     override fun observeRecent(
         symbol: String,

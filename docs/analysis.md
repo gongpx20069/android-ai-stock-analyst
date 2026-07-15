@@ -106,6 +106,24 @@ The main UI summary is a pair of numeric cards:
 > The MVP includes only **MA50/200, RSI(14), and 52-week positioning**.
 > MACD, Bollinger Bands, and ATR are phase-two additions.
 
+Implemented indicator contract:
+
+- Inputs are valid, completed `1D` bars for one canonical symbol, exchange,
+  and provider source, ordered by exchange timestamp.
+- Duplicate starts use the provider version with the latest `fetchedAt`.
+- Missing trading dates are not filled. Unfinished or partial daily bars do
+  not enter any window.
+- `MA50` and `MA200` are simple moving averages of the latest 50 and 200
+  completed closes. A value remains unavailable until its full window exists.
+- `RSI(14)` uses Wilder's method. The first average gain and loss are the
+  arithmetic means of the first 14 close-to-close changes; each later value
+  uses `(previousAverage * 13 + currentValue) / 14`.
+- RSI is unavailable with fewer than 15 closes. A flat window returns `50`, a
+  gain-only series returns `100`, and a loss-only series returns `0`.
+- The snapshot retains `asOf`, `calculatedAt`, source `fetchedAt`, a 24-hour
+  cache `staleAfter`, close count, original bar source, and
+  `LOCAL_CALCULATION` as the calculation source.
+
 ### 1.4 Calculation pipeline and inputs for AI and ML
 
 ```text
@@ -120,7 +138,7 @@ The main UI summary is a pair of numeric cards:
 [Local Kotlin use cases]
   ├─ Valuation snapshot
   ├─ Support/resistance: price history -> 4 methods -> level set
-  ├─ Technicals: price history -> deterministic calculations
+  ├─ Technicals: completed daily history -> MA50/200 + Wilder RSI(14)
   └─ Shared analysis snapshot for UI, screening, AI, and ML
 ```
 

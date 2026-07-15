@@ -218,6 +218,38 @@ data class PriceBar(
     fun isCompletedAt(now: Instant): Boolean = !now.isBefore(endExclusive)
 }
 
+data class TechnicalIndicatorSnapshot(
+    val symbol: StockSymbol,
+    val exchange: Exchange,
+    val closeCount: Int,
+    val ma50: Double?,
+    val ma200: Double?,
+    val rsi14: Double?,
+    val asOf: Instant,
+    val calculatedAt: Instant,
+    val dataFetchedAt: Instant,
+    val staleAfter: Instant,
+    val barSource: DataSource,
+    val source: DataSource = DataSource.LOCAL_CALCULATION,
+) {
+    init {
+        require(closeCount > 0) { "Technical indicators require price history" }
+        require(ma50 == null || ma50 > 0.0) { "MA50 must be positive when present" }
+        require(ma200 == null || ma200 > 0.0) { "MA200 must be positive when present" }
+        require(rsi14 == null || rsi14 in 0.0..100.0) {
+            "RSI(14) must be between 0 and 100 when present"
+        }
+        require(!staleAfter.isBefore(dataFetchedAt)) {
+            "Technical indicator stale time cannot precede fetch time"
+        }
+        require(source == DataSource.LOCAL_CALCULATION) {
+            "Technical indicators must be calculated locally"
+        }
+    }
+
+    fun isStaleAt(now: Instant): Boolean = !now.isBefore(staleAfter)
+}
+
 enum class PredictionHorizon {
     THIRTY_MINUTES,
     FIVE_TRADING_DAYS,

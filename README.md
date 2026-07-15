@@ -43,8 +43,10 @@ using encrypted user credentials and explicit Live IEX, non-consolidated feed
 disclosure. Its paginated split-adjusted bars now flow into the canonical
 `PriceBar` model and Room v2 cache. Completed 5-minute bars are now derived
 locally from exchange-time-aligned 1-minute IEX bars and persisted atomically
-with their source range. Indicators, chart UI, screening, and ONNX inference
-remain to be implemented.
+with their source range. The local domain layer now calculates MA50, MA200, and
+Wilder RSI(14) from completed valid daily bars and exposes a freshness-aware
+snapshot through the repository. Chart UI, support/resistance, screening, and
+ONNX inference remain to be implemented.
 
 ## Documentation
 

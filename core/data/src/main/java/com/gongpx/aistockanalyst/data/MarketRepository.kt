@@ -7,6 +7,7 @@ import com.gongpx.aistockanalyst.database.toEntity
 import com.gongpx.aistockanalyst.database.toModel
 import com.gongpx.aistockanalyst.datastore.MarketDataSourceSettingsStore
 import com.gongpx.aistockanalyst.domain.PriceBarAggregator
+import com.gongpx.aistockanalyst.domain.TechnicalIndicatorCalculator
 import com.gongpx.aistockanalyst.model.BarInterval
 import com.gongpx.aistockanalyst.model.ChartProvider
 import com.gongpx.aistockanalyst.model.DataSource
@@ -15,6 +16,7 @@ import com.gongpx.aistockanalyst.model.ParseStatus
 import com.gongpx.aistockanalyst.model.PriceBar
 import com.gongpx.aistockanalyst.model.QuoteSnapshot
 import com.gongpx.aistockanalyst.model.StockSymbol
+import com.gongpx.aistockanalyst.model.TechnicalIndicatorSnapshot
 import com.gongpx.aistockanalyst.model.ValuationSnapshot
 import com.gongpx.aistockanalyst.network.QuoteClient
 import com.gongpx.aistockanalyst.network.ChartClient
@@ -54,6 +56,11 @@ interface MarketRepository {
         interval: BarInterval,
         limit: Int,
     ): Flow<List<PriceBar>>
+
+    fun observeTechnicalIndicators(
+        symbol: StockSymbol,
+        exchange: Exchange,
+    ): Flow<TechnicalIndicatorSnapshot?>
 
     suspend fun refreshQuote(
         symbol: StockSymbol,
@@ -108,6 +115,27 @@ class RoomMarketRepository(
             when (settings.chartProvider) {
                 ChartProvider.NOT_CONFIGURED -> emptyList()
                 ChartProvider.ALPACA_IEX -> entities.map { it.toModel() }
+            }
+        }
+    }
+
+    override fun observeTechnicalIndicators(
+        symbol: StockSymbol,
+        exchange: Exchange,
+    ): Flow<TechnicalIndicatorSnapshot?> {
+        val dailyBars = priceBarDao.observeHistory(
+            symbol = symbol.value,
+            exchange = exchange.name,
+            interval = BarInterval.ONE_DAY.name,
+            source = DataSource.ALPACA_IEX.name,
+        )
+        return combine(settingsStore.settings, dailyBars) { settings, entities ->
+            when (settings.chartProvider) {
+                ChartProvider.NOT_CONFIGURED -> null
+                ChartProvider.ALPACA_IEX -> TechnicalIndicatorCalculator.calculateDaily(
+                    dailyBars = entities.map { it.toModel() },
+                    calculatedAt = clock.instant(),
+                )
             }
         }
     }

@@ -311,6 +311,12 @@ Completed 5-minute bars are derived locally from 1-minute data and persisted as
 first-class records so screening, indicators, and the intraday model can all
 reuse the same canonical bar set.
 
+MA50, MA200, and RSI(14) are calculated on demand from the complete valid,
+completed Alpaca IEX daily history observed in Room. They are not persisted as
+provider facts. Their normalized snapshot records the latest daily-bar
+`fetchedAt` and becomes cache-stale after 24 hours without a fresher daily-bar
+refresh.
+
 ### 4.3 Implementation checklist
 
 - [x] Map Tencent and Sina fields explicitly by positional index; do not rely on

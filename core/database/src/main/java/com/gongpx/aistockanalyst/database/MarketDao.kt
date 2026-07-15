@@ -64,6 +64,23 @@ interface ValuationDao {
 interface PriceBarDao {
     @Query(
         """
+        SELECT * FROM price_bars
+        WHERE symbol = :symbol
+            AND exchange = :exchange
+            AND interval = :interval
+            AND source = :source
+        ORDER BY startEpochMillis ASC
+        """,
+    )
+    fun observeHistory(
+        symbol: String,
+        exchange: String,
+        interval: String,
+        source: String,
+    ): Flow<List<PriceBarEntity>>
+
+    @Query(
+        """
         SELECT * FROM (
             SELECT * FROM price_bars
             WHERE symbol = :symbol
