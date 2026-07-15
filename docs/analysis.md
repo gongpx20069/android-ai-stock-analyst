@@ -111,7 +111,7 @@ The main UI summary is a pair of numeric cards:
 ```text
 [Android provider clients]
   ├─ Tencent / Sina -> quotes
-  ├─ Validated chart provider -> OHLCV (not yet configured)
+  ├─ User-selected Alpaca Basic -> Live IEX, non-consolidated OHLCV
   └─ Yahoo Finance -> valuation and analyst snapshot
         ▼
 [Room repositories]
@@ -148,7 +148,7 @@ interpretation after ranking. A price drop alone never qualifies as value.
 **Step 1: universe**
 
 - Load the NASDAQ, NYSE, and NYSE American universe from
-  [`data-sources.md` §2.4](data-sources.md#24-us-exchange-screening-universe).
+  [`data-sources.md` §2.5](data-sources.md#25-us-exchange-screening-universe).
 - Keep common stocks and data-complete ADRs; exclude ETFs, funds, warrants,
   rights, units, and preferred shares before valuation scoring.
 

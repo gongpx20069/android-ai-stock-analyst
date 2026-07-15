@@ -2,6 +2,9 @@ package com.gongpx.aistockanalyst.ui
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.gongpx.aistockanalyst.datastore.AlpacaCredentials
+import com.gongpx.aistockanalyst.datastore.CredentialsStorageException
+import com.gongpx.aistockanalyst.datastore.MarketDataCredentialsStore
 import com.gongpx.aistockanalyst.datastore.MarketDataSourceSettingsStore
 import com.gongpx.aistockanalyst.datastore.SettingsStorageException
 import com.gongpx.aistockanalyst.model.ChartProvider
@@ -18,12 +21,15 @@ import kotlinx.coroutines.launch
 
 data class SettingsUiState(
     val dataSources: MarketDataSourceSettings = MarketDataSourceSettings(),
+    val hasAlpacaCredentials: Boolean = false,
     val storageError: String? = null,
+    val credentialsError: String? = null,
 )
 
 @HiltViewModel
 class AppViewModel @Inject constructor(
     private val settingsStore: MarketDataSourceSettingsStore,
+    private val credentialsStore: MarketDataCredentialsStore,
 ) : ViewModel() {
     private val mutableUiState = MutableStateFlow(SettingsUiState())
     val uiState: StateFlow<SettingsUiState> = mutableUiState.asStateFlow()
@@ -31,6 +37,7 @@ class AppViewModel @Inject constructor(
 
     init {
         observeSettings()
+        refreshCredentialsStatus()
     }
 
     private fun observeSettings() {
@@ -38,7 +45,10 @@ class AppViewModel @Inject constructor(
         settingsObservationJob = viewModelScope.launch {
             try {
                 settingsStore.settings.collect { settings ->
-                    mutableUiState.value = SettingsUiState(dataSources = settings)
+                    mutableUiState.value = mutableUiState.value.copy(
+                        dataSources = settings,
+                        storageError = null,
+                    )
                 }
             } catch (failure: SettingsStorageException) {
                 mutableUiState.value = mutableUiState.value.copy(
@@ -62,6 +72,70 @@ class AppViewModel @Inject constructor(
 
     fun resetDataSourceSettings() {
         updateSettings(settingsStore::resetToDefaults)
+    }
+
+    fun saveAlpacaCredentials(
+        keyId: String,
+        secretKey: String,
+    ) {
+        val normalizedKeyId = keyId.trim()
+        val normalizedSecret = secretKey.trim()
+        if (normalizedKeyId.isEmpty() || normalizedSecret.isEmpty()) {
+            mutableUiState.value = mutableUiState.value.copy(
+                credentialsError = "Alpaca key ID and secret key are required",
+            )
+            return
+        }
+        viewModelScope.launch {
+            try {
+                credentialsStore.setAlpacaCredentials(
+                    AlpacaCredentials(
+                        keyId = normalizedKeyId,
+                        secretKey = normalizedSecret,
+                    ),
+                )
+                mutableUiState.value = mutableUiState.value.copy(
+                    hasAlpacaCredentials = true,
+                    credentialsError = null,
+                )
+            } catch (failure: CredentialsStorageException) {
+                mutableUiState.value = mutableUiState.value.copy(
+                    credentialsError = failure.message,
+                )
+            }
+        }
+    }
+
+    fun clearAlpacaCredentials() {
+        viewModelScope.launch {
+            try {
+                credentialsStore.clearAlpacaCredentials()
+                mutableUiState.value = mutableUiState.value.copy(
+                    hasAlpacaCredentials = false,
+                    credentialsError = null,
+                )
+            } catch (failure: CredentialsStorageException) {
+                mutableUiState.value = mutableUiState.value.copy(
+                    credentialsError = failure.message,
+                )
+            }
+        }
+    }
+
+    private fun refreshCredentialsStatus() {
+        viewModelScope.launch {
+            try {
+                val hasCredentials = credentialsStore.getAlpacaCredentials() != null
+                mutableUiState.value = mutableUiState.value.copy(
+                    hasAlpacaCredentials = hasCredentials,
+                    credentialsError = null,
+                )
+            } catch (failure: CredentialsStorageException) {
+                mutableUiState.value = mutableUiState.value.copy(
+                    credentialsError = failure.message,
+                )
+            }
+        }
     }
 
     private fun updateSettings(update: suspend () -> Unit) {

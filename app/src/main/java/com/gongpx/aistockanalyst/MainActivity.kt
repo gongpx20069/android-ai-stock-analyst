@@ -25,6 +25,8 @@ class MainActivity : ComponentActivity() {
                     onChartProviderSelected = viewModel::setChartProvider,
                     onValuationProviderSelected = viewModel::setValuationProvider,
                     onResetDataSourceSettings = viewModel::resetDataSourceSettings,
+                    onSaveAlpacaCredentials = viewModel::saveAlpacaCredentials,
+                    onClearAlpacaCredentials = viewModel::clearAlpacaCredentials,
                 )
             }
         }

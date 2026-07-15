@@ -8,13 +8,21 @@ import com.gongpx.aistockanalyst.database.ValuationDao
 import com.gongpx.aistockanalyst.database.ValuationEntity
 import com.gongpx.aistockanalyst.database.toEntity
 import com.gongpx.aistockanalyst.database.toModel
+import com.gongpx.aistockanalyst.datastore.MarketDataSourceSettingsStore
 import com.gongpx.aistockanalyst.model.AnalystTargets
+import com.gongpx.aistockanalyst.model.BarInterval
+import com.gongpx.aistockanalyst.model.ChartProvider
 import com.gongpx.aistockanalyst.model.DataSource
 import com.gongpx.aistockanalyst.model.Exchange
+import com.gongpx.aistockanalyst.model.MarketDataSourceSettings
 import com.gongpx.aistockanalyst.model.ParseStatus
+import com.gongpx.aistockanalyst.model.PriceBar
+import com.gongpx.aistockanalyst.model.QuoteProvider
 import com.gongpx.aistockanalyst.model.QuoteSnapshot
 import com.gongpx.aistockanalyst.model.StockSymbol
+import com.gongpx.aistockanalyst.model.ValuationProvider
 import com.gongpx.aistockanalyst.model.ValuationSnapshot
+import com.gongpx.aistockanalyst.network.ChartClient
 import com.gongpx.aistockanalyst.network.QuoteClient
 import com.gongpx.aistockanalyst.network.ValuationClient
 import java.io.IOException
@@ -41,7 +49,9 @@ class RoomMarketRepositoryTest {
                     exchange: Exchange,
                 ): QuoteSnapshot = throw IOException("offline")
             },
+            chartClient = UnusedChartClient,
             valuationClient = UnusedValuationClient,
+            settingsStore = AlpacaSettingsStore,
             quoteDao = quoteDao,
             valuationDao = FakeValuationDao(),
             priceBarDao = FakePriceBarDao(),
@@ -67,11 +77,13 @@ class RoomMarketRepositoryTest {
         val valuationDao = FakeValuationDao(cached.toEntity())
         val repository = RoomMarketRepository(
             quoteClient = UnusedQuoteClient,
+            chartClient = UnusedChartClient,
             valuationClient = object : ValuationClient {
                 override suspend fun fetchValuation(
                     symbol: StockSymbol,
                 ): ValuationSnapshot = valuation(symbol, ParseStatus.PARTIAL)
             },
+            settingsStore = AlpacaSettingsStore,
             quoteDao = FakeQuoteDao(),
             valuationDao = valuationDao,
             priceBarDao = FakePriceBarDao(),
@@ -86,6 +98,111 @@ class RoomMarketRepositoryTest {
         assertTrue(result is RefreshResult.Cached)
         assertEquals(ParseStatus.VALID, result.value.parseStatus)
         assertEquals(cached, valuationDao.get(symbol.value)?.toModel())
+    }
+
+    @Test
+    fun `bar refresh persists completed provider history`() = runBlocking {
+        val symbol = StockSymbol.of("AAPL")
+        val expected = priceBar(symbol)
+        val priceBarDao = FakePriceBarDao().apply {
+            upsertAll(listOf(expected.copy(source = DataSource.TENCENT).toEntity()))
+        }
+        val repository = RoomMarketRepository(
+            quoteClient = UnusedQuoteClient,
+            chartClient = object : ChartClient {
+                override suspend fun fetchBars(
+                    symbol: StockSymbol,
+                    exchange: Exchange,
+                    interval: BarInterval,
+                    start: Instant,
+                    endExclusive: Instant,
+                ): List<PriceBar> = listOf(expected)
+            },
+            valuationClient = UnusedValuationClient,
+            settingsStore = AlpacaSettingsStore,
+            quoteDao = FakeQuoteDao(),
+            valuationDao = FakeValuationDao(),
+            priceBarDao = priceBarDao,
+            clock = Clock.fixed(
+                Instant.parse("2026-07-14T15:05:00Z"),
+                ZoneOffset.UTC,
+            ),
+        )
+
+        val result = repository.refreshBars(
+            symbol = symbol,
+            exchange = Exchange.NASDAQ,
+            interval = BarInterval.ONE_MINUTE,
+            start = expected.start,
+            endExclusive = expected.endExclusive,
+        )
+
+        assertTrue(result is RefreshResult.Fresh)
+        assertEquals(
+            listOf(expected),
+            priceBarDao.getRange(
+                symbol = symbol.value,
+                exchange = Exchange.NASDAQ.name,
+                interval = BarInterval.ONE_MINUTE.name,
+                source = DataSource.ALPACA_IEX.name,
+                startEpochMillis = expected.start.toEpochMilli(),
+                endExclusiveEpochMillis = expected.endExclusive.toEpochMilli(),
+            ).map { it.toModel() },
+        )
+        assertEquals(
+            emptyList<PriceBarEntity>(),
+            priceBarDao.getRange(
+                symbol = symbol.value,
+                exchange = Exchange.NASDAQ.name,
+                interval = BarInterval.ONE_MINUTE.name,
+                source = DataSource.TENCENT.name,
+                startEpochMillis = expected.start.toEpochMilli(),
+                endExclusiveEpochMillis = expected.endExclusive.toEpochMilli(),
+            ),
+        )
+    }
+
+    @Test
+    fun `bar refresh returns cached history when provider fails`() = runBlocking {
+        val symbol = StockSymbol.of("AAPL")
+        val cached = priceBar(symbol)
+        val priceBarDao = FakePriceBarDao().apply {
+            upsertAll(listOf(cached.toEntity()))
+        }
+        val repository = RoomMarketRepository(
+            quoteClient = UnusedQuoteClient,
+            chartClient = object : ChartClient {
+                override suspend fun fetchBars(
+                    symbol: StockSymbol,
+                    exchange: Exchange,
+                    interval: BarInterval,
+                    start: Instant,
+                    endExclusive: Instant,
+                ): List<PriceBar> = throw IOException("rate limited")
+            },
+            valuationClient = UnusedValuationClient,
+            settingsStore = AlpacaSettingsStore,
+            quoteDao = FakeQuoteDao(),
+            valuationDao = FakeValuationDao(),
+            priceBarDao = priceBarDao,
+            clock = Clock.fixed(
+                Instant.parse("2026-07-14T15:05:00Z"),
+                ZoneOffset.UTC,
+            ),
+        )
+
+        val result = repository.refreshBars(
+            symbol = symbol,
+            exchange = Exchange.NASDAQ,
+            interval = BarInterval.ONE_MINUTE,
+            start = cached.start,
+            endExclusive = cached.endExclusive,
+        )
+
+        assertTrue(result is RefreshResult.Cached)
+        result as RefreshResult.Cached
+        assertEquals(listOf(cached), result.value)
+        assertEquals("rate limited", result.failureMessage)
     }
 
     private fun quote(symbol: StockSymbol): QuoteSnapshot = QuoteSnapshot(
@@ -138,6 +255,21 @@ class RoomMarketRepositoryTest {
         source = DataSource.YAHOO_FINANCE,
     )
 
+    private fun priceBar(symbol: StockSymbol): PriceBar = PriceBar(
+        symbol = symbol,
+        exchange = Exchange.NASDAQ,
+        interval = BarInterval.ONE_MINUTE,
+        start = Instant.parse("2026-07-14T15:00:00Z"),
+        endExclusive = Instant.parse("2026-07-14T15:01:00Z"),
+        open = 199.0,
+        high = 201.0,
+        low = 198.0,
+        close = 200.0,
+        volume = 10_000L,
+        fetchedAt = Instant.parse("2026-07-14T15:01:05Z"),
+        source = DataSource.ALPACA_IEX,
+    )
+
 }
 
 private class FakeQuoteDao(initial: QuoteEntity? = null) : QuoteDao {
@@ -177,23 +309,71 @@ private class FakePriceBarDao : PriceBarDao {
         symbol: String,
         exchange: String,
         interval: String,
+        source: String,
         limit: Int,
-    ): Flow<List<PriceBarEntity>> = state
+    ): Flow<List<PriceBarEntity>> = MutableStateFlow(
+        state.value
+            .filter {
+                it.symbol == symbol &&
+                    it.exchange == exchange &&
+                    it.interval == interval &&
+                    it.source == source
+            }
+            .sortedByDescending(PriceBarEntity::startEpochMillis)
+            .take(limit)
+            .sortedBy(PriceBarEntity::startEpochMillis),
+    )
 
     override suspend fun getRecent(
         symbol: String,
         exchange: String,
         interval: String,
+        source: String,
         limit: Int,
     ): List<PriceBarEntity> = state.value
         .filter {
             it.symbol == symbol &&
                 it.exchange == exchange &&
-                it.interval == interval
+                it.interval == interval &&
+                it.source == source
         }
         .sortedByDescending(PriceBarEntity::startEpochMillis)
         .take(limit)
         .sortedBy(PriceBarEntity::startEpochMillis)
+
+    override suspend fun getRange(
+        symbol: String,
+        exchange: String,
+        interval: String,
+        source: String,
+        startEpochMillis: Long,
+        endExclusiveEpochMillis: Long,
+    ): List<PriceBarEntity> = state.value
+        .filter {
+            it.symbol == symbol &&
+                it.exchange == exchange &&
+                it.interval == interval &&
+                it.source == source &&
+                it.startEpochMillis >= startEpochMillis &&
+                it.endExclusiveEpochMillis <= endExclusiveEpochMillis
+        }
+        .sortedBy(PriceBarEntity::startEpochMillis)
+
+    override suspend fun deleteRange(
+        symbol: String,
+        exchange: String,
+        interval: String,
+        startEpochMillis: Long,
+        endExclusiveEpochMillis: Long,
+    ) {
+        state.value = state.value.filterNot {
+            it.symbol == symbol &&
+                it.exchange == exchange &&
+                it.interval == interval &&
+                it.startEpochMillis >= startEpochMillis &&
+                it.endExclusiveEpochMillis <= endExclusiveEpochMillis
+        }
+    }
 
     override suspend fun upsertAll(entities: List<PriceBarEntity>) {
         state.value = (state.value + entities)
@@ -215,4 +395,31 @@ private object UnusedQuoteClient : QuoteClient {
 private object UnusedValuationClient : ValuationClient {
     override suspend fun fetchValuation(symbol: StockSymbol): ValuationSnapshot =
         error("Not used by this test")
+}
+
+private object UnusedChartClient : ChartClient {
+    override suspend fun fetchBars(
+        symbol: StockSymbol,
+        exchange: Exchange,
+        interval: BarInterval,
+        start: Instant,
+        endExclusive: Instant,
+    ): List<PriceBar> = error("Not used by this test")
+}
+
+private object AlpacaSettingsStore : MarketDataSourceSettingsStore {
+    override val settings: Flow<MarketDataSourceSettings> = MutableStateFlow(
+        MarketDataSourceSettings(chartProvider = ChartProvider.ALPACA_IEX),
+    )
+
+    override suspend fun setQuoteProvider(provider: QuoteProvider) =
+        error("Not used by this test")
+
+    override suspend fun setChartProvider(provider: ChartProvider) =
+        error("Not used by this test")
+
+    override suspend fun setValuationProvider(provider: ValuationProvider) =
+        error("Not used by this test")
+
+    override suspend fun resetToDefaults() = error("Not used by this test")
 }

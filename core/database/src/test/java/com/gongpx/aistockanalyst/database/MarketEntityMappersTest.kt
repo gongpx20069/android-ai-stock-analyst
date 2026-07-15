@@ -33,7 +33,7 @@ class MarketEntityMappersTest {
             fetchedAt = Instant.parse("2026-07-14T15:00:05Z"),
             staleAfter = Instant.parse("2026-07-14T15:01:05Z"),
             parseStatus = ParseStatus.VALID,
-            source = DataSource.TENCENT,
+            source = DataSource.ALPACA_IEX,
         )
 
         assertEquals(quote, quote.toEntity().toModel())

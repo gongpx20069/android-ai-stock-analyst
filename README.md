@@ -38,10 +38,11 @@ Kotlin/Compose project, four-tab application shell, shared design system,
 market-domain models, user-selectable Tencent/Sina quote routing, an isolated
 Yahoo Finance cookie/crumb valuation client, Room-backed quote and valuation
 caches, DataStore provider settings, and a Hilt-wired repository with explicit
-stale-cache results. The canonical `PriceBar` model, Room v2 bar schema,
-deduplicating DAO, mappings, and observable cache API are ready. A trustworthy
-US-stock chart provider must be selected before ingestion, aggregation,
-indicators, chart UI, screening, or ONNX inference proceeds.
+stale-cache results. Alpaca Basic is available as an opt-in chart provider
+using encrypted user credentials and explicit Live IEX, non-consolidated feed
+disclosure. Its paginated split-adjusted bars now flow into the canonical
+`PriceBar` model and Room v2 cache. Local 5-minute aggregation, indicators,
+chart UI, screening, and ONNX inference remain to be implemented.
 
 ## Documentation
 

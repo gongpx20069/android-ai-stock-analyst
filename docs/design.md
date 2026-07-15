@@ -212,8 +212,11 @@ Arbiter card
 
 - Independent market-data provider selectors:
   - Quotes: Auto (Tencent then Sina), Tencent-only, or Sina-only
-  - Charts: not configured until a trustworthy US OHLCV provider is validated
+  - Charts: Not configured, or Alpaca Basic with encrypted user credentials
   - Valuation: Yahoo Finance in the current implementation
+- The Alpaca option always identifies its feed as Live IEX and
+  non-consolidated. It must not imply that OHLCV or volume represents the full
+  US SIP market.
 - Provider choices persist locally. Explicit quote-provider modes surface
   failure and stale-cache state instead of silently switching providers.
 - A visible reset action restores provider defaults when stored settings cannot
@@ -332,7 +335,7 @@ ML-specific charts and the prediction contract remain owned by
 | Analyst range card | `targetLowPrice`, `targetMedianPrice`, `targetHighPrice`, `numberOfAnalystOpinions`, freshness | Normalized fundamental snapshot |
 | AI forecast summary card | `horizonOutlooks`, confidence, evidence, watch conditions | Validated arbiter output from [`ai-prompt.md`](ai-prompt.md) |
 | Forward P/E comparison | `forwardPE` | Fundamental snapshot |
-| Live market chart | Intraday and higher-timeframe OHLCV, volume, and optional `30m` probability line | Validated chart provider (not yet configured; rejected Tencent endpoints are recorded in [`data-sources.md` §2.3](data-sources.md#23-tencent-chart-endpoints-and-5-minute-aggregation)) plus local prediction snapshots from [`analysis.md` §4.3](analysis.md#43-live-inference-and-visualization-contract) |
+| Live market chart | Intraday and higher-timeframe OHLCV, volume, and optional `30m` probability line | User-selected Alpaca Basic Live IEX bars, with the non-consolidated feed disclosed according to [`data-sources.md` §2.3](data-sources.md#23-alpaca-basic-live-iex-chart-contract), plus local prediction snapshots from [`analysis.md` §4.3](analysis.md#43-live-inference-and-visualization-contract) |
 | LightGBM probability line | `probabilityUp`, `asOf`, `horizon`, `modelVersion` | Local prediction snapshots from [`analysis.md` §4.3](analysis.md#43-live-inference-and-visualization-contract) |
 
 ---
@@ -343,7 +346,7 @@ ML-specific charts and the prediction contract remain owned by
 | State | Design |
 |---|---|
 | First open / empty | Guide the user to add a first watchlist stock and configure Azure only if AI is wanted |
-| Key not configured | AI stays disabled with a direct path to settings; valuation and technical facts still work |
+| Key not configured | The affected Azure or Alpaca feature stays disabled with a direct path to settings; unrelated cached facts still work |
 | Loading | Show skeletons for valuation data and streaming progress for AI |
 | Data temporarily unavailable | Keep the last good snapshot visible, show timestamps, and explain which layer failed |
 | Screening refresh | Show WorkManager progress, last completed stage, resumable status, and cache freshness |

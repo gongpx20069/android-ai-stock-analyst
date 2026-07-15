@@ -14,7 +14,7 @@
 | Responsibility | Selected source | Notes |
 |---|---|---|
 | Live quote snapshot | User choice: Auto, Tencent, or Sina | Auto uses Tencent first and Sina only on failure; explicit choices never switch silently |
-| Intraday and higher-timeframe OHLCV | Not configured pending provider validation | Canonical Room storage is ready; no unverified endpoint is activated |
+| Intraday and higher-timeframe OHLCV | User choice: Not configured or Alpaca Basic Live IEX | Alpaca is opt-in BYOK; IEX is one exchange and is never represented as consolidated SIP data |
 | Screening universe | Nasdaq public screener | Operating-company securities listed on NASDAQ, NYSE, and NYSE American |
 | Fundamental and analyst snapshot | Independently selected valuation provider; Yahoo Finance currently available | Direct HTTP `quoteSummary` is unofficial and revocable; cached locally in Room |
 | Derived indicators | Local Kotlin calculation engine | Deterministic indicators are calculated on-device |
@@ -27,8 +27,8 @@ local storage. No project server exists between the app and these providers.
 Provider choices are separate settings rather than one global source:
 
 - Quotes: `Auto` (default), Tencent-only, or Sina-only.
-- Charts: no provider is currently configured. The setting remains independent
-  so a validated chart client can be added without changing quote behavior.
+- Charts: `Not configured` (default), or Alpaca Basic Live IEX with encrypted
+  user credentials. The setting remains independent from quote behavior.
 - Valuation: Yahoo Finance is the only implemented option; the setting is
   independent so valuation availability never controls quote or chart refresh.
 
@@ -77,8 +77,75 @@ default `Auto` quote mode.
 Sina may be selected directly. In `Auto` quote mode it is used only when
 Tencent fails, times out, or returns an invalid payload.
 
-<a id="23-tencent-chart-endpoints-and-5-minute-aggregation"></a>
-### 2.3 Rejected Tencent chart endpoints and 5-minute requirement
+<a id="23-alpaca-basic-live-iex-chart-contract"></a>
+### 2.3 Alpaca Basic Live IEX chart contract
+
+Alpaca Basic is an optional BYOK chart source. It is never an automatic
+fallback and is not selected until the user saves credentials and explicitly
+chooses it. Send credentials only through these request headers:
+
+```text
+APCA-API-KEY-ID: <user key ID>
+APCA-API-SECRET-KEY: <user secret key>
+```
+
+The app encrypts both values with an AES-GCM key held by Android Keystore.
+Credentials must not appear in URLs, logs, Room, DataStore, backups, or source
+control.
+
+Historical bars use:
+
+```text
+GET https://data.alpaca.markets/v2/stocks/bars
+```
+
+Request contract:
+
+- `symbols=<provider symbol>`
+- `timeframe=1Min|5Min|15Min|30Min|1Hour|4Hour|1Day|1Month`
+- explicit inclusive RFC 3339 `start` and `end`
+- `limit=10000`
+- `sort=asc`
+- `feed=iex`
+- `adjustment=split`
+- the opaque `page_token` from the previous response when present
+
+The client must follow `next_page_token` until it is absent even when a page
+contains fewer rows than the requested limit. The response `bars` object maps
+the provider symbol to arrays containing `t`, `o`, `h`, `l`, `c`, and `v`.
+`t` is the bar's UTC start boundary. Missing symbol arrays and missing
+no-trade intervals are valid empty results; malformed bars fail the refresh
+rather than being silently dropped.
+
+Only completed bars whose start and end lie inside the requested range are
+returned. Upserts use `(symbol, exchange, interval, barStart)`, so a provider
+correction replaces the earlier record. Alpaca's stream may publish
+`updatedBars` after late trades; streaming correction ingestion is not yet
+implemented and must be added before continuous live chart updates.
+
+Alpaca Basic limitations are product-visible:
+
+- Live equities are the IEX feed only, not consolidated SIP data.
+- IEX represents only a subset of US trading activity. OHLCV and volume can
+  differ materially from full-market values and must not support
+  consolidated-volume claims.
+- The Basic contract advertises historical data from 2016, 200 historical
+  requests per minute, and 30 WebSocket symbol subscriptions.
+- A user-owned account and credentials are required. Before public
+  distribution, obtain provider confirmation that an independently
+  distributed open-source BYOK client is permitted to render each user's own
+  locally fetched data.
+
+Official contract references:
+
+- [Historical stock bars](https://docs.alpaca.markets/us/reference/stockbars)
+- [Market Data API plans](https://docs.alpaca.markets/us/docs/about-market-data-api)
+- [Historical stock data and feeds](https://docs.alpaca.markets/us/docs/historical-stock-data-1)
+- [Market-data FAQ](https://docs.alpaca.markets/us/docs/market-data-faq)
+- [Real-time stock data](https://docs.alpaca.markets/us/docs/real-time-stock-pricing-data)
+
+<a id="24-tencent-chart-endpoints-and-5-minute-aggregation"></a>
+### 2.4 Rejected Tencent chart endpoints and 5-minute requirement
 
 - Same-day intraday line:
   `GET https://web.ifzq.gtimg.cn/appstock/app/minute/query?code=usAAPL`
@@ -95,8 +162,8 @@ queries also returned date-only day aggregates during verification. They are
 not activated as OHLC sources. Tencent's nominal `m15 / m30 / m60` queries
 returned the same date-only session aggregate, while daily/monthly queries did
 not return trustworthy recent US history. Tencent is therefore quote-only.
-A validated chart provider contract is required before any bar ingestion or
-local 5-minute aggregation can be implemented honestly.
+These endpoints remain rejected even though Alpaca is now available. They
+must not be reintroduced as chart fallbacks.
 
 For the MVP, the Android app must build **completed 5-minute bars** locally by
 aggregating verified 1-minute data in exchange time. Re-check any undocumented
@@ -115,8 +182,8 @@ Implementation requirements:
 
 ---
 
-<a id="24-us-exchange-screening-universe"></a>
-### 2.4 US exchange screening universe
+<a id="25-us-exchange-screening-universe"></a>
+### 2.5 US exchange screening universe
 
 - Fetch each exchange separately:
   - NASDAQ:
@@ -194,7 +261,7 @@ continue to work.
 | Data surface | Freshness expectation | Fallback / stale behavior |
 |---|---|---|
 | Live quote snapshot | Poll every 30-60 seconds or refresh manually | Auto falls back from Tencent to Sina; explicit Tencent/Sina modes do not switch. On failure, show stale status and keep the last good timestamp visible |
-| Intraday bars for charting and ML | Use only completed bars | If a gap cannot be repaired, mark intraday predictions stale rather than guessing |
+| Intraday bars for charting and ML | Use only completed Alpaca Live IEX bars when configured | If credentials, entitlement, rate limits, or gaps prevent refresh, retain Room history and mark dependent predictions stale rather than guessing |
 | Daily / monthly candles | Refresh after market close or when the vendor publishes the new bar | Keep the last good history and show the chart timestamp |
 | Fundamental snapshot | Refresh on a daily cache cadence | Keep the last good cache in Room and show freshness warnings when analyst data is stale |
 | Screening cache | Refresh in WorkManager batches under network and battery constraints | Resume from the last successful stage or page instead of restarting the universe every time |
@@ -233,7 +300,8 @@ reuse the same canonical bar set.
       direct Android client; do not leak provider quirks into UI code.
 - [x] Normalize quote timestamps using the canonical exchange-time model from
       [`architecture.md`](architecture.md).
-- [ ] Select and validate a US OHLCV provider for every promised timeframe.
+- [x] Select an opt-in US OHLCV provider with an official interval,
+      pagination, authentication, and adjustment contract.
 - [x] Record `source`, `fetchedAt`, parse status, and `staleAfter` for normalized
       quote and fundamental snapshots.
 - [x] Distinguish quote freshness from fundamental freshness in local models and
@@ -248,6 +316,10 @@ reuse the same canonical bar set.
       refreshes can resume cleanly.
 - [ ] Revalidate undocumented endpoints, headers, response shapes, and practical
       anti-bot limits before release.
+- [ ] Probe Alpaca Basic with user-owned credentials across every timeframe,
+      split boundaries, market sessions, pagination, and rate-limit responses.
+- [ ] Obtain Alpaca confirmation for open-source third-party BYOK display
+      before public distribution.
 - [ ] Treat undocumented vendor behavior as revocable; add monitoring and
       backoff instead of assuming stability.
 

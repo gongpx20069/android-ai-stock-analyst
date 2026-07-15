@@ -32,6 +32,7 @@ enum class DataSource {
     TENCENT,
     SINA,
     YAHOO_FINANCE,
+    ALPACA_IEX,
     LOCAL_CALCULATION,
     ONNX_RUNTIME,
 }
@@ -44,6 +45,7 @@ enum class QuoteProvider {
 
 enum class ChartProvider {
     NOT_CONFIGURED,
+    ALPACA_IEX,
 }
 
 enum class ValuationProvider {

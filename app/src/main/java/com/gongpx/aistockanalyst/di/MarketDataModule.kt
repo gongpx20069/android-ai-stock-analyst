@@ -7,13 +7,19 @@ import androidx.datastore.preferences.preferencesDataStore
 import androidx.room.Room
 import com.gongpx.aistockanalyst.data.MarketRepository
 import com.gongpx.aistockanalyst.data.RoomMarketRepository
+import com.gongpx.aistockanalyst.data.UserSelectedChartClient
 import com.gongpx.aistockanalyst.data.UserSelectedQuoteClient
 import com.gongpx.aistockanalyst.database.MarketDatabase
 import com.gongpx.aistockanalyst.database.PriceBarDao
 import com.gongpx.aistockanalyst.database.QuoteDao
 import com.gongpx.aistockanalyst.database.ValuationDao
 import com.gongpx.aistockanalyst.datastore.DataStoreMarketDataSourceSettings
+import com.gongpx.aistockanalyst.datastore.EncryptedMarketDataCredentialsStore
+import com.gongpx.aistockanalyst.datastore.MarketDataCredentialsStore
 import com.gongpx.aistockanalyst.datastore.MarketDataSourceSettingsStore
+import com.gongpx.aistockanalyst.network.AlpacaApiCredentials
+import com.gongpx.aistockanalyst.network.AlpacaChartClient
+import com.gongpx.aistockanalyst.network.ChartClient
 import com.gongpx.aistockanalyst.network.InMemoryCookieJar
 import com.gongpx.aistockanalyst.network.MarketNetworkFactory
 import com.gongpx.aistockanalyst.network.QuoteClient
@@ -44,6 +50,10 @@ private annotation class TencentQuotes
 @Qualifier
 @Retention(AnnotationRetention.BINARY)
 private annotation class SinaQuotes
+
+@Qualifier
+@Retention(AnnotationRetention.BINARY)
+private annotation class AlpacaCharts
 
 @Module
 @InstallIn(SingletonComponent::class)
@@ -109,6 +119,38 @@ object MarketDataModule {
 
     @Provides
     @Singleton
+    @AlpacaCharts
+    fun provideAlpacaChartClient(
+        service: RawHttpService,
+        json: Json,
+        clock: Clock,
+        credentialsStore: MarketDataCredentialsStore,
+    ): ChartClient = AlpacaChartClient(
+        service = service,
+        json = json,
+        clock = clock,
+        credentialsProvider = {
+            credentialsStore.getAlpacaCredentials()?.let { credentials ->
+                AlpacaApiCredentials(
+                    keyId = credentials.keyId,
+                    secretKey = credentials.secretKey,
+                )
+            }
+        },
+    )
+
+    @Provides
+    @Singleton
+    fun provideChartClient(
+        settingsStore: MarketDataSourceSettingsStore,
+        @AlpacaCharts alpacaClient: ChartClient,
+    ): ChartClient = UserSelectedChartClient(
+        settingsStore = settingsStore,
+        alpacaClient = alpacaClient,
+    )
+
+    @Provides
+    @Singleton
     fun provideDatabase(
         @ApplicationContext context: Context,
     ): MarketDatabase = Room.databaseBuilder(
@@ -130,6 +172,12 @@ object MarketDataModule {
     ): MarketDataSourceSettingsStore = DataStoreMarketDataSourceSettings(dataStore)
 
     @Provides
+    @Singleton
+    fun provideMarketDataCredentialsStore(
+        @ApplicationContext context: Context,
+    ): MarketDataCredentialsStore = EncryptedMarketDataCredentialsStore(context)
+
+    @Provides
     fun provideQuoteDao(database: MarketDatabase): QuoteDao = database.quoteDao()
 
     @Provides
@@ -144,14 +192,18 @@ object MarketDataModule {
     @Singleton
     fun provideMarketRepository(
         quoteClient: QuoteClient,
+        chartClient: ChartClient,
         valuationClient: ValuationClient,
+        settingsStore: MarketDataSourceSettingsStore,
         quoteDao: QuoteDao,
         valuationDao: ValuationDao,
         priceBarDao: PriceBarDao,
         clock: Clock,
     ): MarketRepository = RoomMarketRepository(
         quoteClient = quoteClient,
+        chartClient = chartClient,
         valuationClient = valuationClient,
+        settingsStore = settingsStore,
         quoteDao = quoteDao,
         valuationDao = valuationDao,
         priceBarDao = priceBarDao,
