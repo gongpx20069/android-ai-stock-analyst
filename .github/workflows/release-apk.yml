@@ -42,8 +42,17 @@ jobs:
       - name: Install Android SDK 36
         shell: bash
         run: |
-          yes | sdkmanager --licenses >/dev/null 2>&1 || true
-          sdkmanager "platforms;android-36" "build-tools;36.0.0"
+          android_sdk="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}"
+          sdkmanager_path="${android_sdk}/cmdline-tools/latest/bin/sdkmanager"
+          if [[ ! -x "${sdkmanager_path}" ]]; then
+            sdkmanager_path="$(find "${android_sdk}/cmdline-tools" -type f -name sdkmanager | head -n 1)"
+          fi
+          if [[ -z "${sdkmanager_path}" || ! -x "${sdkmanager_path}" ]]; then
+            echo "sdkmanager was not found under ${android_sdk}." >&2
+            exit 1
+          fi
+          yes | "${sdkmanager_path}" --licenses >/dev/null 2>&1 || true
+          "${sdkmanager_path}" "platforms;android-36" "build-tools;36.0.0"
 
       - name: Determine next 1.0.x version
         id: version
