@@ -270,6 +270,18 @@ exact style belongs in MASTER.
 Choice: Vico provides the base layer and Compose provides the product-specific
 overlay and interaction model.
 
+**Current implementation slice**
+
+- Stock lookup opens a detail state that observes quote, valuation, technical,
+  support/resistance, and timeframe-specific Room flows.
+- The initial Vico chart supports all eight timeframe shortcuts, neutral
+  hollow/filled candlesticks, device-local time labels, a dollar price axis,
+  and an independently scaled IEX-volume end axis.
+- Drag/pinch interaction comes from Vico, and the visible reset action restores
+  the initial zoom and jumps to the latest bar.
+- Crosshair-synchronized OHLCV, per-symbol timeframe persistence, landscape
+  mode, and the LightGBM probability overlay remain later chart slices.
+
 **TradingView-inspired acceptance checklist**
 
 - Pinch to zoom, drag to pan, and double-tap to reset

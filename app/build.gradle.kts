@@ -62,7 +62,11 @@ dependencies {
     implementation(libs.lifecycle.viewmodel.ktx)
     implementation(libs.okhttp)
     implementation(libs.room.runtime)
+    implementation(libs.vico.compose)
+    implementation(libs.vico.compose.m3)
     ksp(libs.hilt.compiler)
 
     debugImplementation(libs.compose.ui.tooling)
+    testImplementation(libs.junit)
+    testImplementation(libs.kotlinx.coroutines.test)
 }

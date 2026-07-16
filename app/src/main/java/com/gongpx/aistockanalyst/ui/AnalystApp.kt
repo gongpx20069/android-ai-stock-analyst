@@ -15,8 +15,6 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoAwesome
-import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Star
@@ -40,7 +38,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -50,6 +47,8 @@ import com.gongpx.aistockanalyst.R
 import com.gongpx.aistockanalyst.designsystem.theme.AppColors
 import com.gongpx.aistockanalyst.designsystem.theme.AppSpacing
 import com.gongpx.aistockanalyst.model.ChartProvider
+import com.gongpx.aistockanalyst.model.BarInterval
+import com.gongpx.aistockanalyst.model.Exchange
 import com.gongpx.aistockanalyst.model.QuoteProvider
 import com.gongpx.aistockanalyst.model.ValuationProvider
 
@@ -66,6 +65,11 @@ private enum class AppDestination(
 @Composable
 fun AnalystApp(
     settingsState: SettingsUiState,
+    stockDetailState: StockDetailUiState,
+    onOpenStock: (String, Exchange) -> Unit,
+    onCloseStock: () -> Unit,
+    onRefreshStock: () -> Unit,
+    onChartIntervalSelected: (BarInterval) -> Unit,
     onQuoteProviderSelected: (QuoteProvider) -> Unit,
     onChartProviderSelected: (ChartProvider) -> Unit,
     onValuationProviderSelected: (ValuationProvider) -> Unit,
@@ -98,7 +102,14 @@ fun AnalystApp(
         },
     ) { innerPadding ->
         when (destination) {
-            AppDestination.Watchlist -> WatchlistScreen(innerPadding)
+            AppDestination.Watchlist -> WatchlistDestination(
+                contentPadding = innerPadding,
+                state = stockDetailState,
+                onOpenStock = onOpenStock,
+                onCloseStock = onCloseStock,
+                onRefresh = onRefreshStock,
+                onIntervalSelected = onChartIntervalSelected,
+            )
             AppDestination.Screening -> ScreeningScreen(innerPadding)
             AppDestination.Ai -> AiScreen(innerPadding)
             AppDestination.Me -> SettingsScreen(
@@ -110,51 +121,6 @@ fun AnalystApp(
                 onResetDataSourceSettings = onResetDataSourceSettings,
                 onSaveAlpacaCredentials = onSaveAlpacaCredentials,
                 onClearAlpacaCredentials = onClearAlpacaCredentials,
-            )
-        }
-    }
-}
-
-@Composable
-private fun WatchlistScreen(contentPadding: PaddingValues) {
-    ScreenContainer(contentPadding) {
-        ScreenTitle(stringResource(R.string.watchlist_title))
-        InformationCard {
-            Text(
-                text = stringResource(R.string.watchlist_empty_title),
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-            )
-            Spacer(Modifier.height(AppSpacing.small))
-            Text(
-                text = stringResource(R.string.watchlist_empty_body),
-                color = AppColors.onSurfaceMuted,
-            )
-            Spacer(Modifier.height(AppSpacing.medium))
-            Button(
-                onClick = {},
-                enabled = false,
-            ) {
-                Text(stringResource(R.string.add_stock))
-            }
-        }
-        InformationCard {
-            Text(
-                text = stringResource(R.string.valuation_rule_title),
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-            )
-            Spacer(Modifier.height(AppSpacing.small))
-            SemanticRow(
-                icon = Icons.Default.KeyboardArrowUp,
-                text = stringResource(R.string.valuation_upside),
-                color = AppColors.valuationUpside,
-            )
-            Spacer(Modifier.height(AppSpacing.small))
-            SemanticRow(
-                icon = Icons.Default.KeyboardArrowDown,
-                text = stringResource(R.string.valuation_risk),
-                color = AppColors.valuationRisk,
             )
         }
     }
@@ -429,7 +395,7 @@ private fun <T> ProviderSelector(
 }
 
 @Composable
-private fun ScreenContainer(
+internal fun ScreenContainer(
     contentPadding: PaddingValues,
     content: @Composable ColumnScope.() -> Unit,
 ) {
@@ -445,7 +411,7 @@ private fun ScreenContainer(
 }
 
 @Composable
-private fun ScreenTitle(text: String) {
+internal fun ScreenTitle(text: String) {
     Text(
         text = text,
         style = MaterialTheme.typography.headlineSmall,
@@ -454,7 +420,7 @@ private fun ScreenTitle(text: String) {
 }
 
 @Composable
-private fun InformationCard(content: @Composable ColumnScope.() -> Unit) {
+internal fun InformationCard(content: @Composable ColumnScope.() -> Unit) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = AppColors.surface),
@@ -462,27 +428,6 @@ private fun InformationCard(content: @Composable ColumnScope.() -> Unit) {
         Column(
             modifier = Modifier.padding(AppSpacing.medium),
             content = content,
-        )
-    }
-}
-
-@Composable
-private fun SemanticRow(
-    icon: ImageVector,
-    text: String,
-    color: Color,
-) {
-    Row(
-        horizontalArrangement = Arrangement.spacedBy(AppSpacing.small),
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = color,
-        )
-        Text(
-            text = text,
-            color = color,
         )
     }
 }

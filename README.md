@@ -47,8 +47,13 @@ with their source range. The local domain layer now calculates MA50, MA200, and
 Wilder RSI(14) from completed valid daily bars and exposes a freshness-aware
 snapshot through the repository. The same normalized history now drives
 52-week positioning plus pivot, swing, Fibonacci, moving-average, and
-52-week support/resistance levels with cross-method resonance. Chart UI,
-screening, and ONNX inference remain to be implemented.
+52-week support/resistance levels with cross-method resonance. The Watchlist
+tab now provides stock lookup and a first stock-detail slice that combines
+quote, valuation, support/resistance, technicals, and cached multi-timeframe
+bars. Its Vico chart renders neutral candlesticks and an independently scaled
+IEX volume histogram with device-local timestamps, pan/zoom, and reset-to-latest
+behavior. Watchlist persistence, screening, chart probability overlays, and
+ONNX inference remain to be implemented.
 
 ## Documentation
 

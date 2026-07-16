@@ -188,7 +188,7 @@ metrics. For the full contract, see
 | [`design.md`](design.md) | Pages, interactions, chart placement, and behavioral UX rules | Maintained |
 | [`design-system/ai-stock-analyst/MASTER.md`](design-system/ai-stock-analyst/MASTER.md) | Exact visual tokens, accessibility, and chart semantics | Maintained |
 | [`ai-prompt.md`](ai-prompt.md) | 3+1 agent prompts and structured output contract | Maintained |
-| [`../app/`](../app/) | Android application, four-tab Compose shell, and Hilt graph | Implemented foundation |
+| [`../app/`](../app/) | Android application, four-tab Compose shell, Hilt graph, stock lookup/detail state, and Vico market chart | Implemented foundation plus first detail/chart slice |
 | [`../core/data/`](../core/data/) | Local-first repository and stale-cache refresh behavior | Implemented quote, valuation, and bar-history slices |
 | [`../core/database/`](../core/database/) | Room cache, DAOs, schema, and model mappings | Implemented quote, valuation, and bar-history slices |
 | [`../core/datastore/`](../core/datastore/) | Provider preferences and Android-Keystore-backed Alpaca credentials | Implemented |
@@ -207,7 +207,12 @@ implemented. MA50, MA200, and Wilder RSI(14) are calculated locally from the
 complete cached daily history and exposed as a freshness-aware repository
 snapshot. The same history plus the current quote now produces 52-week
 positioning and four-method support/resistance with resonance and nearest-level
-distances. Chart presentation remains.
+distances. The first stock-detail presentation slice now combines these
+snapshots with quote, valuation, and multi-timeframe Room history. Its Vico
+chart uses neutral candlesticks, a separately scaled IEX-volume layer,
+device-local labels, pan/zoom, and reset-to-latest behavior. Probability
+overlays, crosshair synchronization, landscape mode, and persisted watchlists
+remain.
 
 1. Create the Kotlin/Compose Android skeleton with the locked local-only
    module boundaries.

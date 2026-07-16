@@ -322,6 +322,12 @@ the complete normalized daily history, combined with the cached current quote.
 They remain local calculation results rather than provider facts and retain
 both quote and bar provenance plus the earlier freshness deadline.
 
+The stock-detail chart observes only the configured chart provider's Room
+history. It maps timestamps to the device timezone at presentation time and
+keeps the Live IEX volume layer on an independent scale so volume cannot alter
+the price axis. Refresh failures retain visible cached bars and surface the
+provider error instead of producing an empty success state.
+
 ### 4.3 Implementation checklist
 
 - [x] Map Tencent and Sina fields explicitly by positional index; do not rely on
@@ -344,6 +350,8 @@ both quote and bar provenance plus the earlier freshness deadline.
       bars.
 - [x] Define canonical bar persistence with source, fetch time, parse status,
       interval, and exchange metadata; deduplicate by the Room primary key.
+- [x] Present cached multi-timeframe bars with device-local labels, explicit
+      Live IEX disclosure, and an independently scaled volume layer.
 - [ ] Persist screening progress, page cursors, and stage markers so background
       refreshes can resume cleanly.
 - [ ] Revalidate undocumented endpoints, headers, response shapes, and practical
