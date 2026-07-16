@@ -46,6 +46,7 @@ Update the owner document instead of duplicating detailed rules elsewhere.
 | [`docs/design.md`](docs/design.md) | Screens, UX flows, TradingView-inspired chart interactions, and state design |
 | [`docs/design-system/ai-stock-analyst/MASTER.md`](docs/design-system/ai-stock-analyst/MASTER.md) | Exact visual tokens, accessibility rules, and chart semantics |
 | [`docs/ai-prompt.md`](docs/ai-prompt.md) | Azure OpenAI prompt contract, agent roles, safety rules, and JSON output |
+| [`docs/releasing.md`](docs/releasing.md) | Shared APK signing, `1.0.x` allocation, local publishing, and manual GitHub Actions releases |
 | [`settings.gradle.kts`](settings.gradle.kts) and [`gradle/libs.versions.toml`](gradle/libs.versions.toml) | Module graph, repositories, plugins, and dependency versions |
 | [`app/`](app/) | Android application, four-tab Compose shell, resources, and Hilt dependency graph |
 | [`core/data/`](core/data/) | Local-first market repository, refresh results, and stale-cache behavior |
@@ -64,6 +65,7 @@ Routing shortcuts:
 - Page behavior or chart gestures -> `docs/design.md`
 - Exact color, type, spacing, or chart semantics -> `MASTER.md`
 - LLM inputs, outputs, or disclaimer text -> `docs/ai-prompt.md`
+- APK signing, versioning, or GitHub Releases -> `docs/releasing.md`
 
 ## 4. Agent guardrails
 

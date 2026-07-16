@@ -66,6 +66,7 @@ ONNX inference remain to be implemented.
 | [Product design](docs/design.md) | Screens, journeys, TradingView-inspired chart behavior, and state design |
 | [Design system](docs/design-system/ai-stock-analyst/MASTER.md) | Visual tokens, accessibility, colors, typography, and chart semantics |
 | [AI prompt contract](docs/ai-prompt.md) | Agent responsibilities, prompt invariants, and structured output schema |
+| [APK releases](docs/releasing.md) | Shared signing, automatic `1.0.x` versioning, local publishing, and manual Actions releases |
 
 ## Disclaimer
 

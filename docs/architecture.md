@@ -113,6 +113,7 @@ Boundaries:
 | A1 | Android stack | **Native Kotlin plus Jetpack Compose**, replacing the earlier cross-platform direction | §2.1 |
 | A2 | Android architecture | Material 3 + MVVM/UDF + Coroutines/Flow + Hilt + Retrofit/OkHttp + Room/DataStore + Keystore | §2.1 |
 | A3 | Build baseline | Gradle Wrapper 9.4.1, Android Gradle Plugin 9.2.0, JDK 17, compile/target SDK 36, and minimum SDK 26 | Repository build files |
+| A4 | APK release contract | Local publishing and manually dispatched GitHub Actions share one release key and allocate the next `1.0.x` from remote `v1.0.x` tags; Android `versionCode` is `1_000_000 + x` | [`releasing.md`](releasing.md) |
 | B | Data approach | **User-controlled direct Android providers**: quote, chart, and valuation providers are configured independently in DataStore. Quote options are Auto (Tencent then Sina), Tencent-only, and Sina-only. Chart options are Not configured or Alpaca Basic Live IEX with encrypted BYOK credentials and mandatory non-consolidated disclosure. Yahoo Finance `quoteSummary` is the current valuation provider. Room caches normalized snapshots | [`data-sources.md`](data-sources.md) |
 | B2 | Canonical symbol and time model | Use provider-specific symbol mapping at the edges; keep exchange-time-correct timestamps internally for DST, holidays, and bar boundaries; convert every displayed timestamp to the device local timezone | [`data-sources.md`](data-sources.md) |
 | B3 | Project-server boundary | No project server exists for the MVP or current architecture; runtime networking and processing stay local to Android | §2 |
@@ -188,6 +189,7 @@ metrics. For the full contract, see
 | [`design.md`](design.md) | Pages, interactions, chart placement, and behavioral UX rules | Maintained |
 | [`design-system/ai-stock-analyst/MASTER.md`](design-system/ai-stock-analyst/MASTER.md) | Exact visual tokens, accessibility, and chart semantics | Maintained |
 | [`ai-prompt.md`](ai-prompt.md) | 3+1 agent prompts and structured output contract | Maintained |
+| [`releasing.md`](releasing.md) | APK signing, shared patch versioning, and GitHub Release automation | Maintained |
 | [`../app/`](../app/) | Android application, four-tab Compose shell, Hilt graph, stock lookup/detail state, and Vico market chart | Implemented foundation plus first detail/chart slice |
 | [`../core/data/`](../core/data/) | Local-first repository and stale-cache refresh behavior | Implemented quote, valuation, and bar-history slices |
 | [`../core/database/`](../core/database/) | Room cache, DAOs, schema, and model mappings | Implemented quote, valuation, and bar-history slices |
