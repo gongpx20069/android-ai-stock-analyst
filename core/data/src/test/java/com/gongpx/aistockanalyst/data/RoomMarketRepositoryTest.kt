@@ -99,7 +99,220 @@ class RoomMarketRepositoryTest {
 
         assertTrue(result is RefreshResult.Cached)
         assertEquals(ParseStatus.VALID, result.value.parseStatus)
-        assertEquals(cached, valuationDao.get(symbol.value)?.toModel())
+        assertEquals(
+            cached,
+            valuationDao.get(symbol.value, DataSource.YAHOO_FINANCE.name)?.toModel(),
+        )
+    }
+
+    @Test
+    fun `partial valuation merges missing cached fields and keeps fresh values`() = runBlocking {
+        val symbol = StockSymbol.of("AAPL")
+        val cached = valuation(
+            symbol = symbol,
+            parseStatus = ParseStatus.PARTIAL,
+            source = DataSource.FMP,
+        ).copy(
+            targets = AnalystTargets(low = 180.0, median = 220.0, high = 260.0),
+            recommendationKey = "buy",
+        )
+        val incoming = cached.copy(
+            targets = AnalystTargets(low = null, median = null, high = null),
+            recommendationKey = null,
+            fiftyDayAverage = 205.0,
+            asOf = Instant.parse("2026-07-15T15:00:00Z"),
+            fetchedAt = Instant.parse("2026-07-15T15:00:05Z"),
+            staleAfter = Instant.parse("2026-07-16T15:00:05Z"),
+        )
+        val valuationDao = FakeValuationDao(cached.toEntity())
+        val settings = object : MarketDataSourceSettingsStore {
+            override val settings: Flow<MarketDataSourceSettings> = MutableStateFlow(
+                MarketDataSourceSettings(
+                    chartProvider = ChartProvider.ALPACA_IEX,
+                    valuationProvider = ValuationProvider.FMP,
+                ),
+            )
+
+            override suspend fun setQuoteProvider(provider: QuoteProvider) = Unit
+            override suspend fun setChartProvider(provider: ChartProvider) = Unit
+            override suspend fun setValuationProvider(provider: ValuationProvider) = Unit
+            override suspend fun resetToDefaults() = Unit
+        }
+        val repository = RoomMarketRepository(
+            quoteClient = UnusedQuoteClient,
+            chartClient = UnusedChartClient,
+            valuationClient = object : ValuationClient {
+                override suspend fun fetchValuation(
+                    symbol: StockSymbol,
+                ): ValuationSnapshot = incoming
+            },
+            settingsStore = settings,
+            quoteDao = FakeQuoteDao(),
+            valuationDao = valuationDao,
+            priceBarDao = FakePriceBarDao(),
+            clock = Clock.fixed(
+                Instant.parse("2026-07-15T15:05:00Z"),
+                ZoneOffset.UTC,
+            ),
+        )
+
+        val result = repository.refreshValuation(symbol)
+
+        assertTrue(result is RefreshResult.Fresh)
+        val merged = result.value
+        assertEquals(cached.targets, merged.targets)
+        assertEquals(cached.recommendationKey, merged.recommendationKey)
+        assertEquals(205.0, merged.fiftyDayAverage!!, 0.0)
+        assertEquals(incoming.fetchedAt, merged.fetchedAt)
+        assertEquals(incoming.staleAfter, merged.staleAfter)
+        assertEquals(cached.asOf, merged.asOf)
+        assertEquals(merged, valuationDao.get(symbol.value, DataSource.FMP.name)?.toModel())
+    }
+
+    @Test
+    fun `partial valuation does not merge incompatible target or annual ranges`() = runBlocking {
+        val symbol = StockSymbol.of("AAPL")
+        val cached = valuation(
+            symbol = symbol,
+            parseStatus = ParseStatus.PARTIAL,
+            source = DataSource.FMP,
+        ).copy(
+            targets = AnalystTargets(low = 180.0, median = 190.0, high = 260.0),
+            recommendationKey = "buy",
+        )
+        val incoming = cached.copy(
+            targets = AnalystTargets(low = 200.0, median = null, high = null),
+            fiftyTwoWeekLow = 240.0,
+            fiftyTwoWeekHigh = null,
+            recommendationKey = null,
+            fetchedAt = Instant.parse("2026-07-15T15:00:05Z"),
+            staleAfter = Instant.parse("2026-07-16T15:00:05Z"),
+        )
+        val valuationDao = FakeValuationDao(cached.toEntity())
+        val settings = object : MarketDataSourceSettingsStore {
+            override val settings: Flow<MarketDataSourceSettings> = MutableStateFlow(
+                MarketDataSourceSettings(
+                    chartProvider = ChartProvider.ALPACA_IEX,
+                    valuationProvider = ValuationProvider.FMP,
+                ),
+            )
+
+            override suspend fun setQuoteProvider(provider: QuoteProvider) = Unit
+            override suspend fun setChartProvider(provider: ChartProvider) = Unit
+            override suspend fun setValuationProvider(provider: ValuationProvider) = Unit
+            override suspend fun resetToDefaults() = Unit
+        }
+        val repository = RoomMarketRepository(
+            quoteClient = UnusedQuoteClient,
+            chartClient = UnusedChartClient,
+            valuationClient = object : ValuationClient {
+                override suspend fun fetchValuation(
+                    symbol: StockSymbol,
+                ): ValuationSnapshot = incoming
+            },
+            settingsStore = settings,
+            quoteDao = FakeQuoteDao(),
+            valuationDao = valuationDao,
+            priceBarDao = FakePriceBarDao(),
+            clock = Clock.fixed(
+                Instant.parse("2026-07-15T15:05:00Z"),
+                ZoneOffset.UTC,
+            ),
+        )
+
+        val result = repository.refreshValuation(symbol)
+
+        assertTrue(result is RefreshResult.Fresh)
+        assertEquals(
+            AnalystTargets(low = 200.0, median = null, high = 260.0),
+            result.value.targets,
+        )
+        assertEquals(incoming.fiftyTwoWeekLow, result.value.fiftyTwoWeekLow)
+        assertEquals(incoming.fiftyTwoWeekHigh, result.value.fiftyTwoWeekHigh)
+        assertEquals(cached.recommendationKey, result.value.recommendationKey)
+    }
+
+    @Test
+    fun `valuation rejects snapshot for an unexpected symbol`() = runBlocking {
+        val symbol = StockSymbol.of("AAPL")
+        val valuationDao = FakeValuationDao()
+        val repository = RoomMarketRepository(
+            quoteClient = UnusedQuoteClient,
+            chartClient = UnusedChartClient,
+            valuationClient = object : ValuationClient {
+                override suspend fun fetchValuation(
+                    symbol: StockSymbol,
+                ): ValuationSnapshot = valuation(
+                    symbol = StockSymbol.of("MSFT"),
+                    parseStatus = ParseStatus.VALID,
+                )
+            },
+            settingsStore = AlpacaSettingsStore,
+            quoteDao = FakeQuoteDao(),
+            valuationDao = valuationDao,
+            priceBarDao = FakePriceBarDao(),
+            clock = Clock.fixed(
+                Instant.parse("2026-07-15T15:05:00Z"),
+                ZoneOffset.UTC,
+            ),
+        )
+
+        val failure = try {
+            repository.refreshValuation(symbol)
+            null
+        } catch (failure: IOException) {
+            failure
+        }
+
+        assertTrue(failure?.message?.contains("unexpected symbol or source") == true)
+        assertTrue(
+            valuationDao.get(symbol.value, DataSource.YAHOO_FINANCE.name) == null,
+        )
+    }
+
+    @Test
+    fun `valuation failure uses only selected provider cache`() = runBlocking {
+        val symbol = StockSymbol.of("AAPL")
+        val yahoo = valuation(symbol, ParseStatus.VALID, DataSource.YAHOO_FINANCE)
+        val finnhub = valuation(symbol, ParseStatus.VALID, DataSource.FINNHUB)
+        val valuationDao = FakeValuationDao(yahoo.toEntity()).apply {
+            upsert(finnhub.toEntity())
+        }
+        val settings = object : MarketDataSourceSettingsStore {
+            override val settings: Flow<MarketDataSourceSettings> = MutableStateFlow(
+                MarketDataSourceSettings(
+                    chartProvider = ChartProvider.ALPACA_IEX,
+                    valuationProvider = ValuationProvider.FINNHUB,
+                ),
+            )
+
+            override suspend fun setQuoteProvider(provider: QuoteProvider) = Unit
+            override suspend fun setChartProvider(provider: ChartProvider) = Unit
+            override suspend fun setValuationProvider(provider: ValuationProvider) = Unit
+            override suspend fun resetToDefaults() = Unit
+        }
+        val repository = RoomMarketRepository(
+            quoteClient = UnusedQuoteClient,
+            chartClient = UnusedChartClient,
+            valuationClient = object : ValuationClient {
+                override suspend fun fetchValuation(
+                    symbol: StockSymbol,
+                ): ValuationSnapshot = throw IOException("offline")
+            },
+            settingsStore = settings,
+            quoteDao = FakeQuoteDao(),
+            valuationDao = valuationDao,
+            priceBarDao = FakePriceBarDao(),
+            clock = Clock.fixed(
+                Instant.parse("2026-07-14T15:05:00Z"),
+                ZoneOffset.UTC,
+            ),
+        )
+
+        val result = repository.refreshValuation(symbol)
+
+        assertTrue(result is RefreshResult.Cached)
+        assertEquals(DataSource.FINNHUB, result.value.source)
     }
 
     @Test
@@ -546,6 +759,7 @@ class RoomMarketRepositoryTest {
     private fun valuation(
         symbol: StockSymbol,
         parseStatus: ParseStatus,
+        source: DataSource = DataSource.YAHOO_FINANCE,
     ): ValuationSnapshot = ValuationSnapshot(
         symbol = symbol,
         targets = AnalystTargets(
@@ -568,7 +782,7 @@ class RoomMarketRepositoryTest {
         fetchedAt = Instant.parse("2026-07-14T15:00:05Z"),
         staleAfter = Instant.parse("2026-07-15T15:00:05Z"),
         parseStatus = parseStatus,
-        source = DataSource.YAHOO_FINANCE,
+        source = source,
     )
 
     private fun priceBar(symbol: StockSymbol): PriceBar = PriceBar(
@@ -607,14 +821,27 @@ private class FakeQuoteDao(initial: QuoteEntity? = null) : QuoteDao {
 }
 
 private class FakeValuationDao(initial: ValuationEntity? = null) : ValuationDao {
-    private val state = MutableStateFlow(initial)
+    private val state = MutableStateFlow(listOfNotNull(initial))
 
-    override fun observe(symbol: String): Flow<ValuationEntity?> = state
+    override fun observe(
+        symbol: String,
+        source: String,
+    ): Flow<ValuationEntity?> = state.map { entities ->
+        entities.firstOrNull { it.symbol == symbol && it.source == source }
+    }
 
-    override suspend fun get(symbol: String): ValuationEntity? = state.value
+    override suspend fun get(
+        symbol: String,
+        source: String,
+    ): ValuationEntity? = state.value.firstOrNull {
+        it.symbol == symbol && it.source == source
+    }
 
     override suspend fun upsert(entity: ValuationEntity) {
-        state.value = entity
+        state.value = (state.value + entity)
+            .associateBy { it.symbol to it.source }
+            .values
+            .toList()
     }
 }
 

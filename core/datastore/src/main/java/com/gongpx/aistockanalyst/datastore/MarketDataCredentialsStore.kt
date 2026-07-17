@@ -28,35 +28,64 @@ data class AlpacaCredentials(
     }
 }
 
+data class FinnhubApiKey(val value: String) {
+    init {
+        require(value.isNotBlank()) { "Finnhub API key is required" }
+    }
+
+    override fun toString(): String = "FinnhubApiKey(<redacted>)"
+}
+
+data class FmpApiKey(val value: String) {
+    init {
+        require(value.isNotBlank()) { "FMP API key is required" }
+    }
+
+    override fun toString(): String = "FmpApiKey(<redacted>)"
+}
+
 interface MarketDataCredentialsStore {
     suspend fun getAlpacaCredentials(): AlpacaCredentials?
+
+    suspend fun hasAlpacaCredentials(): Boolean = getAlpacaCredentials() != null
 
     suspend fun setAlpacaCredentials(credentials: AlpacaCredentials)
 
     suspend fun clearAlpacaCredentials()
+
+    suspend fun getFinnhubApiKey(): FinnhubApiKey?
+
+    suspend fun hasFinnhubApiKey(): Boolean = getFinnhubApiKey() != null
+
+    suspend fun setFinnhubApiKey(apiKey: FinnhubApiKey)
+
+    suspend fun clearFinnhubApiKey()
+
+    suspend fun getFmpApiKey(): FmpApiKey?
+
+    suspend fun hasFmpApiKey(): Boolean = getFmpApiKey() != null
+
+    suspend fun setFmpApiKey(apiKey: FmpApiKey)
+
+    suspend fun clearFmpApiKey()
 }
 
 class EncryptedMarketDataCredentialsStore internal constructor(
-    context: Context,
     private val dispatcher: CoroutineDispatcher,
     private val codec: CredentialCodec,
+    private val storage: CredentialStorage,
 ) : MarketDataCredentialsStore {
     constructor(context: Context) : this(
-        context = context,
         dispatcher = Dispatchers.IO,
         codec = AesGcmCredentialCodec(
             keyProvider = AndroidKeystoreKeyProvider(),
         ),
-    )
-
-    private val preferences = context.getSharedPreferences(
-        PREFERENCES_NAME,
-        Context.MODE_PRIVATE,
+        storage = SharedPreferencesCredentialStorage(context),
     )
 
     override suspend fun getAlpacaCredentials(): AlpacaCredentials? = withContext(dispatcher) {
-        val encryptedKeyId = preferences.getString(ALPACA_KEY_ID, null)
-        val encryptedSecret = preferences.getString(ALPACA_SECRET_KEY, null)
+        val encryptedKeyId = storage.get(ALPACA_KEY_ID)
+        val encryptedSecret = storage.get(ALPACA_SECRET_KEY)
         if (encryptedKeyId == null && encryptedSecret == null) {
             return@withContext null
         }
@@ -99,11 +128,12 @@ class EncryptedMarketDataCredentialsStore internal constructor(
             )
         }
 
-        val saved = preferences.edit()
-            .putString(ALPACA_KEY_ID, encryptedKeyId)
-            .putString(ALPACA_SECRET_KEY, encryptedSecret)
-            .commit()
-        if (!saved) {
+        if (!storage.put(
+            mapOf(
+                ALPACA_KEY_ID to encryptedKeyId,
+                ALPACA_SECRET_KEY to encryptedSecret,
+            ),
+        )) {
             throw CredentialsStorageException(
                 "Unable to persist Alpaca credentials",
             )
@@ -111,21 +141,121 @@ class EncryptedMarketDataCredentialsStore internal constructor(
     }
 
     override suspend fun clearAlpacaCredentials() = withContext(dispatcher) {
-        val cleared = preferences.edit()
-            .remove(ALPACA_KEY_ID)
-            .remove(ALPACA_SECRET_KEY)
-            .commit()
-        if (!cleared) {
+        if (!storage.remove(setOf(ALPACA_KEY_ID, ALPACA_SECRET_KEY))) {
             throw CredentialsStorageException(
                 "Unable to clear Alpaca credentials",
             )
         }
     }
 
+    override suspend fun getFinnhubApiKey(): FinnhubApiKey? =
+        readApiKey(
+            fieldName = FINNHUB_API_KEY,
+            providerName = "Finnhub",
+            create = ::FinnhubApiKey,
+        )
+
+    override suspend fun setFinnhubApiKey(apiKey: FinnhubApiKey) =
+        writeApiKey(FINNHUB_API_KEY, "Finnhub", apiKey.value)
+
+    override suspend fun clearFinnhubApiKey() =
+        clearApiKey(FINNHUB_API_KEY, "Finnhub")
+
+    override suspend fun getFmpApiKey(): FmpApiKey? =
+        readApiKey(
+            fieldName = FMP_API_KEY,
+            providerName = "FMP",
+            create = ::FmpApiKey,
+        )
+
+    override suspend fun setFmpApiKey(apiKey: FmpApiKey) =
+        writeApiKey(FMP_API_KEY, "FMP", apiKey.value)
+
+    override suspend fun clearFmpApiKey() =
+        clearApiKey(FMP_API_KEY, "FMP")
+
+    private suspend fun <T> readApiKey(
+        fieldName: String,
+        providerName: String,
+        create: (String) -> T,
+    ): T? = withContext(dispatcher) {
+        val encrypted = storage.get(fieldName) ?: return@withContext null
+        try {
+            create(codec.decrypt(fieldName, encrypted))
+        } catch (failure: GeneralSecurityException) {
+            throw CredentialsStorageException(
+                "Unable to decrypt $providerName API key",
+                failure,
+            )
+        } catch (failure: IllegalArgumentException) {
+            throw CredentialsStorageException(
+                "Stored $providerName API key is invalid",
+                failure,
+            )
+        }
+    }
+
+    private suspend fun writeApiKey(
+        fieldName: String,
+        providerName: String,
+        value: String,
+    ) = withContext(dispatcher) {
+        val encrypted = try {
+            codec.encrypt(fieldName, value.trim())
+        } catch (failure: GeneralSecurityException) {
+            throw CredentialsStorageException(
+                "Unable to encrypt $providerName API key",
+                failure,
+            )
+        }
+        if (!storage.put(mapOf(fieldName to encrypted))) {
+            throw CredentialsStorageException("Unable to persist $providerName API key")
+        }
+    }
+
+    private suspend fun clearApiKey(
+        fieldName: String,
+        providerName: String,
+    ) = withContext(dispatcher) {
+        if (!storage.remove(setOf(fieldName))) {
+            throw CredentialsStorageException("Unable to clear $providerName API key")
+        }
+    }
+
     companion object {
-        private const val PREFERENCES_NAME = "market_data_credentials"
         private const val ALPACA_KEY_ID = "alpaca_key_id"
         private const val ALPACA_SECRET_KEY = "alpaca_secret_key"
+        private const val FINNHUB_API_KEY = "finnhub_api_key"
+        private const val FMP_API_KEY = "fmp_api_key"
+    }
+}
+
+internal interface CredentialStorage {
+    fun get(fieldName: String): String?
+
+    fun put(values: Map<String, String>): Boolean
+
+    fun remove(fieldNames: Set<String>): Boolean
+}
+
+private class SharedPreferencesCredentialStorage(context: Context) : CredentialStorage {
+    private val preferences = context.getSharedPreferences(
+        "market_data_credentials",
+        Context.MODE_PRIVATE,
+    )
+
+    override fun get(fieldName: String): String? = preferences.getString(fieldName, null)
+
+    override fun put(values: Map<String, String>): Boolean {
+        val editor = preferences.edit()
+        values.forEach { (fieldName, value) -> editor.putString(fieldName, value) }
+        return editor.commit()
+    }
+
+    override fun remove(fieldNames: Set<String>): Boolean {
+        val editor = preferences.edit()
+        fieldNames.forEach(editor::remove)
+        return editor.commit()
     }
 }
 

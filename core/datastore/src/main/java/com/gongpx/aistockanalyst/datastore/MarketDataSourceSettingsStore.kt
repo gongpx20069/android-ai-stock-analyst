@@ -39,7 +39,7 @@ class DataStoreMarketDataSourceSettings(
             }
             throw failure
         }
-        .map(::toSettings)
+        .map(::marketDataSourceSettings)
 
     override suspend fun setQuoteProvider(provider: QuoteProvider) {
         update(QUOTE_PROVIDER, provider.name)
@@ -76,32 +76,32 @@ class DataStoreMarketDataSourceSettings(
         }
     }
 
-    private fun toSettings(preferences: Preferences): MarketDataSourceSettings =
-        try {
-            MarketDataSourceSettings(
-                quoteProvider = preferences[QUOTE_PROVIDER]
-                    ?.let(QuoteProvider::valueOf)
-                    ?: QuoteProvider.AUTO,
-                chartProvider = preferences[CHART_PROVIDER]
-                    ?.let(::parseChartProvider)
-                    ?: ChartProvider.NOT_CONFIGURED,
-                valuationProvider = preferences[VALUATION_PROVIDER]
-                    ?.let(ValuationProvider::valueOf)
-                    ?: ValuationProvider.YAHOO_FINANCE,
-            )
-        } catch (failure: IllegalArgumentException) {
-            throw SettingsStorageException(
-                "Stored data source setting is not supported",
-                failure,
-            )
-        }
-
     companion object {
         private val QUOTE_PROVIDER = stringPreferencesKey("quote_provider")
         private val CHART_PROVIDER = stringPreferencesKey("chart_provider")
         private val VALUATION_PROVIDER = stringPreferencesKey("valuation_provider")
     }
 }
+
+internal fun marketDataSourceSettings(preferences: Preferences): MarketDataSourceSettings =
+    try {
+        MarketDataSourceSettings(
+            quoteProvider = preferences[stringPreferencesKey("quote_provider")]
+                ?.let(QuoteProvider::valueOf)
+                ?: QuoteProvider.AUTO,
+            chartProvider = preferences[stringPreferencesKey("chart_provider")]
+                ?.let(::parseChartProvider)
+                ?: ChartProvider.NOT_CONFIGURED,
+            valuationProvider = preferences[stringPreferencesKey("valuation_provider")]
+                ?.let(ValuationProvider::valueOf)
+                ?: ValuationProvider.YAHOO_FINANCE,
+        )
+    } catch (failure: IllegalArgumentException) {
+        throw SettingsStorageException(
+            "Stored data source setting is not supported",
+            failure,
+        )
+    }
 
 internal fun clearDataSourcePreferences(preferences: MutablePreferences) {
     preferences.remove(stringPreferencesKey("quote_provider"))

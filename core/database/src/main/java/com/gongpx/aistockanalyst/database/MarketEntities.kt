@@ -30,7 +30,7 @@ data class QuoteEntity(
 
 @Entity(
     tableName = "valuation_snapshots",
-    primaryKeys = ["symbol"],
+    primaryKeys = ["symbol", "source"],
 )
 data class ValuationEntity(
     val symbol: String,

@@ -16,7 +16,7 @@
 | Live quote snapshot | User choice: Auto, Tencent, or Sina | Auto uses Tencent first and Sina only on failure; explicit choices never switch silently |
 | Intraday and higher-timeframe OHLCV | User choice: Not configured or Alpaca Basic Live IEX | Alpaca is opt-in BYOK; IEX is one exchange and is never represented as consolidated SIP data |
 | Screening universe | Nasdaq public screener | Operating-company securities listed on NASDAQ, NYSE, and NYSE American |
-| Fundamental and analyst snapshot | Independently selected valuation provider; Yahoo Finance currently available | Direct HTTP `quoteSummary` is unofficial and revocable; cached locally in Room |
+| Fundamental and analyst snapshot | Yahoo Finance (default), Finnhub BYOK, or FMP BYOK | Explicit selection never falls back; snapshots are cached by symbol and actual source |
 | Derived indicators | Local Kotlin calculation engine | Deterministic indicators are calculated on-device |
 | Prediction snapshots | ONNX Runtime Android | LightGBM inference runs on-device from bundled model assets |
 
@@ -36,8 +36,9 @@ Provider choices are separate settings rather than one global source:
 - Quotes: `Auto` (default), Tencent-only, or Sina-only.
 - Charts: `Not configured` (default), or Alpaca Basic Live IEX with encrypted
   user credentials. The setting remains independent from quote behavior.
-- Valuation: Yahoo Finance is the only implemented option; the setting is
-  independent so valuation availability never controls quote or chart refresh.
+- Valuation: Yahoo Finance (default), Finnhub BYOK, or Financial Modeling Prep
+  (FMP) BYOK. The setting is independent so valuation availability never
+  controls quote or chart refresh.
 
 All choices are persisted in Android DataStore. Explicit provider selection
 must surface that provider's failure and use the last good Room cache; it must
@@ -259,7 +260,23 @@ Implementation requirements:
 
 ---
 
-## 3. Required fundamental fields from direct Yahoo Finance HTTP `quoteSummary`
+## 3. Valuation provider contracts
+
+Valuation clients normalize provider-specific responses into one snapshot but
+do not invent unavailable fields. Explicit selection never switches providers
+silently. Room keys valuation snapshots by `(symbol, source)`, and partial
+refresh preservation compares only snapshots from the same source.
+
+Finnhub and FMP are opt-in BYOK providers. Free endpoint entitlement is not
+verified, and permission to display each user's fetched data in a publicly
+distributed BYOK application must be confirmed with the provider before public
+distribution. The app does not advertise complete free coverage.
+
+Credentials use Android-Keystore-backed AES-GCM encryption. They never enter
+ordinary DataStore, Room, backups, source control, logs, UI error messages, or
+project servers.
+
+### 3.1 Yahoo Finance HTTP `quoteSummary`
 
 Yahoo Finance is used directly from Android through an encapsulated
 `quoteSummary` client, for example:
@@ -297,6 +314,108 @@ to [`analysis.md`](analysis.md) and [`ai-prompt.md`](ai-prompt.md).
 When Yahoo fails, valuation-dependent features may become stale or unavailable,
 but live quotes, charts, local technicals, and existing watchlists must
 continue to work.
+
+### 3.2 Finnhub valuation BYOK contract
+
+Base URL:
+
+```text
+https://finnhub.io/api/v1
+```
+
+Send the user API key only as:
+
+```text
+X-Finnhub-Token: <user API key>
+```
+
+The three required requests are:
+
+```text
+GET /stock/price-target?symbol=AAPL
+GET /stock/recommendation?symbol=AAPL
+GET /stock/metric?symbol=AAPL&metric=all
+```
+
+Field mapping:
+
+| Endpoint | Provider fields | Canonical use |
+|---|---|---|
+| `price-target` | `targetLow`, `targetMedian`, `targetHigh`, `numberAnalysts`, `lastUpdated` | Analyst range, target-aligned analyst count, and provider as-of date |
+| `recommendation` | newest `period`, `strongBuy`, `buy`, `hold`, `sell`, `strongSell` | Canonical local rating only |
+| `metric?metric=all` | `forwardPE`, `50DayMovingAverage`, `200DayMovingAverage`, `52WeekHigh`, `52WeekLow`, `marketCapitalization` | Forward P/E, positioning, and market cap |
+
+`marketCapitalization` is documented by Finnhub in millions. Normalize it to
+base currency units by multiplying by `1,000,000`, with range validation before
+converting to the canonical integer field.
+
+The recommendation bucket sum is **not** an analyst-count substitute. The
+canonical rating uses the newest recommendation period and a deterministic
+weighted mean: `strongBuy=5`, `buy=4`, `hold=3`, `sell=2`,
+`strongSell=1`. Map scores `>=4.5` to `strong_buy`, `>=3.5` to `buy`,
+`>=2.5` to `hold`, `>=1.5` to `sell`, and lower scores to `strong_sell`.
+All-zero or absent buckets yield no rating.
+
+Use `lastUpdated` at UTC start-of-day as `asOf` when it is a valid ISO date;
+otherwise use `fetchedAt`. An empty optional endpoint object or recommendation
+array may produce `ParseStatus.PARTIAL`. A present malformed field is a payload
+error. Authentication, entitlement, and other HTTP failures remain provider
+failures and never become empty success responses.
+
+Official links:
+
+- [Finnhub signup](https://finnhub.io/register)
+- [Finnhub API documentation](https://finnhub.io/docs/api)
+
+### 3.3 Financial Modeling Prep stable valuation BYOK contract
+
+Base URL:
+
+```text
+https://financialmodelingprep.com/stable
+```
+
+FMP requires query-string authentication:
+
+```text
+apikey=<user API key>
+```
+
+The client must not attach a logging interceptor. It catches transport failures
+at the provider boundary and emits a sanitized provider error without retaining
+the request URL or underlying exception, so the query key cannot reach UI
+errors or logs.
+
+The three required requests are:
+
+```text
+GET /quote?symbol=AAPL&apikey=<redacted>
+GET /price-target-consensus?symbol=AAPL&apikey=<redacted>
+GET /grades-consensus?symbol=AAPL&apikey=<redacted>
+```
+
+Field mapping:
+
+| Endpoint | Provider fields | Canonical use |
+|---|---|---|
+| `quote` | `yearHigh`, `yearLow`, `priceAvg50`, `priceAvg200`, `marketCap`, `timestamp` | Positioning, base-unit market cap, and `asOf` |
+| `price-target-consensus` | `targetHigh`, `targetLow`, `targetConsensus`, `targetMedian` | Analyst range; prefer `targetMedian`, then `targetConsensus` |
+| `grades-consensus` | `strongBuy`, `buy`, `hold`, `sell`, `strongSell`, `consensus` | Validate buckets and use provider consensus as rating |
+
+These verified stable contracts do not expose a canonical forward P/E or a
+target-aligned analyst count. Both fields remain null; EPS-estimate coverage or
+grade-bucket sums must not be substituted or relabeled. FMP snapshots therefore
+remain `ParseStatus.PARTIAL`.
+
+Use the quote `timestamp` as `asOf` when it is a valid epoch-second value;
+otherwise use `fetchedAt`. Empty optional endpoint arrays may yield partial
+data. Present malformed values are payload errors. Authentication, entitlement,
+and other HTTP failures remain provider failures.
+
+Official links:
+
+- [FMP signup](https://site.financialmodelingprep.com/register)
+- [FMP API documentation](https://site.financialmodelingprep.com/developer/docs)
 
 ---
 
@@ -359,8 +478,8 @@ provider error instead of producing an empty success state.
       undocumented field names.
 - [x] Persist quote, chart, and valuation provider choices independently in
       DataStore; allow fallback only in explicit Auto quote mode.
-- [x] Encapsulate Yahoo cookie, crumb, session, and module handling inside the
-      direct Android client; do not leak provider quirks into UI code.
+- [x] Encapsulate Yahoo session handling and Finnhub/FMP auth, endpoint
+      combination, parsing, and redaction inside direct Android clients.
 - [x] Normalize quote timestamps using the canonical exchange-time model from
       [`architecture.md`](architecture.md).
 - [x] Select an opt-in US OHLCV provider with an official interval,
@@ -369,8 +488,12 @@ provider error instead of producing an empty success state.
       quote and fundamental snapshots.
 - [x] Distinguish quote freshness from fundamental freshness in local models and
       repository results.
-- [x] Keep quote refresh and cached watchlist data available when Yahoo
-      valuation refresh fails.
+- [x] Keep quote refresh and cached watchlist data available when the selected
+      valuation provider fails.
+- [x] Store valuation caches by symbol and source; provider switches never
+      relabel another provider's snapshot.
+- [x] Encrypt independent Finnhub and FMP keys locally and keep FMP query-auth
+      URLs out of surfaced exceptions.
 - [x] Build completed 5-minute bars locally and never infer from unfinished
       bars.
 - [x] Define canonical bar persistence with source, fetch time, parse status,

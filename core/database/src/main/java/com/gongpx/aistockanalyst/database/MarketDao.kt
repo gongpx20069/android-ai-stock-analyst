@@ -41,20 +41,26 @@ interface ValuationDao {
     @Query(
         """
         SELECT * FROM valuation_snapshots
-        WHERE symbol = :symbol
+        WHERE symbol = :symbol AND source = :source
         LIMIT 1
         """,
     )
-    fun observe(symbol: String): Flow<ValuationEntity?>
+    fun observe(
+        symbol: String,
+        source: String,
+    ): Flow<ValuationEntity?>
 
     @Query(
         """
         SELECT * FROM valuation_snapshots
-        WHERE symbol = :symbol
+        WHERE symbol = :symbol AND source = :source
         LIMIT 1
         """,
     )
-    suspend fun get(symbol: String): ValuationEntity?
+    suspend fun get(
+        symbol: String,
+        source: String,
+    ): ValuationEntity?
 
     @Upsert
     suspend fun upsert(entity: ValuationEntity)

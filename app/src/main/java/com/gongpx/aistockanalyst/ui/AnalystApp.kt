@@ -85,6 +85,10 @@ fun AnalystApp(
     onResetDataSourceSettings: () -> Unit,
     onSaveAlpacaCredentials: (String, String) -> Unit,
     onClearAlpacaCredentials: () -> Unit,
+    onSaveFinnhubApiKey: (String) -> Unit,
+    onClearFinnhubApiKey: () -> Unit,
+    onSaveFmpApiKey: (String) -> Unit,
+    onClearFmpApiKey: () -> Unit,
 ) {
     val context = LocalContext.current
     val uriHandler = LocalUriHandler.current
@@ -136,6 +140,10 @@ fun AnalystApp(
                 onResetDataSourceSettings = onResetDataSourceSettings,
                 onSaveAlpacaCredentials = onSaveAlpacaCredentials,
                 onClearAlpacaCredentials = onClearAlpacaCredentials,
+                onSaveFinnhubApiKey = onSaveFinnhubApiKey,
+                onClearFinnhubApiKey = onClearFinnhubApiKey,
+                onSaveFmpApiKey = onSaveFmpApiKey,
+                onClearFmpApiKey = onClearFmpApiKey,
             )
         }
     }
@@ -231,6 +239,10 @@ private fun SettingsScreen(
     onResetDataSourceSettings: () -> Unit,
     onSaveAlpacaCredentials: (String, String) -> Unit,
     onClearAlpacaCredentials: () -> Unit,
+    onSaveFinnhubApiKey: (String) -> Unit,
+    onClearFinnhubApiKey: () -> Unit,
+    onSaveFmpApiKey: (String) -> Unit,
+    onClearFmpApiKey: () -> Unit,
 ) {
     val context = LocalContext.current
     val uriHandler = LocalUriHandler.current
@@ -323,9 +335,61 @@ private fun SettingsScreen(
                 title = stringResource(R.string.settings_valuation_provider),
                 options = ValuationProvider.entries,
                 selected = settingsState.dataSources.valuationProvider,
-                label = { stringResource(R.string.provider_yahoo_finance) },
+                label = { provider ->
+                    when (provider) {
+                        ValuationProvider.YAHOO_FINANCE ->
+                            stringResource(R.string.provider_yahoo_finance)
+                        ValuationProvider.FINNHUB -> stringResource(R.string.provider_finnhub)
+                        ValuationProvider.FMP -> stringResource(R.string.provider_fmp)
+                    }
+                },
                 onSelected = onValuationProviderSelected,
             )
+            when (settingsState.dataSources.valuationProvider) {
+                ValuationProvider.YAHOO_FINANCE -> Unit
+                ValuationProvider.FINNHUB -> {
+                    Spacer(Modifier.height(AppSpacing.medium))
+                    ValuationApiKeyEditor(
+                        title = stringResource(R.string.settings_finnhub_setup_title),
+                        body = stringResource(R.string.settings_finnhub_setup_body),
+                        disclosure = stringResource(R.string.settings_finnhub_disclosure),
+                        keyLabel = stringResource(R.string.settings_finnhub_api_key),
+                        hasKey = settingsState.hasFinnhubApiKey,
+                        savedText = stringResource(R.string.settings_finnhub_key_saved),
+                        missingText = stringResource(R.string.settings_finnhub_key_missing),
+                        requiredText = stringResource(R.string.settings_finnhub_key_required),
+                        error = settingsState.credentialsError,
+                        inputMissing = settingsState.finnhubApiKeyInputMissing,
+                        signupUrl = FINNHUB_SIGN_UP_URL,
+                        docsUrl = FINNHUB_DOCS_URL,
+                        clearTitle = stringResource(R.string.settings_finnhub_clear_title),
+                        clearBody = stringResource(R.string.settings_finnhub_clear_body),
+                        onSave = onSaveFinnhubApiKey,
+                        onClear = onClearFinnhubApiKey,
+                    )
+                }
+                ValuationProvider.FMP -> {
+                    Spacer(Modifier.height(AppSpacing.medium))
+                    ValuationApiKeyEditor(
+                        title = stringResource(R.string.settings_fmp_setup_title),
+                        body = stringResource(R.string.settings_fmp_setup_body),
+                        disclosure = stringResource(R.string.settings_fmp_disclosure),
+                        keyLabel = stringResource(R.string.settings_fmp_api_key),
+                        hasKey = settingsState.hasFmpApiKey,
+                        savedText = stringResource(R.string.settings_fmp_key_saved),
+                        missingText = stringResource(R.string.settings_fmp_key_missing),
+                        requiredText = stringResource(R.string.settings_fmp_key_required),
+                        error = settingsState.credentialsError,
+                        inputMissing = settingsState.fmpApiKeyInputMissing,
+                        signupUrl = FMP_SIGN_UP_URL,
+                        docsUrl = FMP_DOCS_URL,
+                        clearTitle = stringResource(R.string.settings_fmp_clear_title),
+                        clearBody = stringResource(R.string.settings_fmp_clear_body),
+                        onSave = onSaveFmpApiKey,
+                        onClear = onClearFmpApiKey,
+                    )
+                }
+            }
             settingsState.storageError?.let { error ->
                 Spacer(Modifier.height(AppSpacing.medium))
                 Text(
@@ -384,6 +448,7 @@ private fun SettingsScreen(
             )
             Spacer(Modifier.height(AppSpacing.small))
             Row(
+                modifier = Modifier.horizontalScroll(rememberScrollState()),
                 horizontalArrangement = Arrangement.spacedBy(AppSpacing.small),
             ) {
                 Button(
@@ -461,6 +526,11 @@ private const val FEEDBACK_EMAIL_URI = "mailto:$FEEDBACK_EMAIL"
 private const val ALPACA_SIGN_UP_URL = "https://app.alpaca.markets/signup"
 private const val ALPACA_DASHBOARD_URL =
     "https://app.alpaca.markets/brokerage/dashboard/overview"
+private const val FINNHUB_SIGN_UP_URL = "https://finnhub.io/register"
+private const val FINNHUB_DOCS_URL = "https://finnhub.io/docs/api"
+private const val FMP_SIGN_UP_URL = "https://site.financialmodelingprep.com/register"
+private const val FMP_DOCS_URL =
+    "https://site.financialmodelingprep.com/developer/docs"
 
 private fun openExternalUri(
     context: Context,
@@ -530,6 +600,7 @@ private fun AlpacaCredentialsEditor(
             Text(stringResource(R.string.settings_alpaca_open_dashboard))
         }
     }
+
     Spacer(Modifier.height(AppSpacing.small))
     Text(
         text = stringResource(R.string.settings_alpaca_security),
@@ -630,6 +701,114 @@ private fun AlpacaCredentialsEditor(
 }
 
 @Composable
+private fun ValuationApiKeyEditor(
+    title: String,
+    body: String,
+    disclosure: String,
+    keyLabel: String,
+    hasKey: Boolean,
+    savedText: String,
+    missingText: String,
+    requiredText: String,
+    error: String?,
+    inputMissing: Boolean,
+    signupUrl: String,
+    docsUrl: String,
+    clearTitle: String,
+    clearBody: String,
+    onSave: (String) -> Unit,
+    onClear: () -> Unit,
+) {
+    val context = LocalContext.current
+    val uriHandler = LocalUriHandler.current
+    var apiKey by remember { mutableStateOf("") }
+    var showClearConfirmation by rememberSaveable { mutableStateOf(false) }
+
+    Text(title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+    Spacer(Modifier.height(AppSpacing.extraSmall))
+    Text(body, color = AppColors.onSurfaceMuted)
+    Spacer(Modifier.height(AppSpacing.small))
+    Row(
+        modifier = Modifier.horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(AppSpacing.small),
+    ) {
+        Button(onClick = { openExternalUri(context, uriHandler, signupUrl) }) {
+            Text(stringResource(R.string.settings_provider_sign_up))
+        }
+        TextButton(onClick = { openExternalUri(context, uriHandler, docsUrl) }) {
+            Text(stringResource(R.string.settings_provider_open_docs))
+        }
+    }
+    Spacer(Modifier.height(AppSpacing.small))
+    Text(disclosure, color = AppColors.onSurfaceMuted)
+    Spacer(Modifier.height(AppSpacing.small))
+    Text(
+        text = if (hasKey) savedText else missingText,
+        color = if (hasKey) AppColors.primary else MaterialTheme.colorScheme.error,
+    )
+    Spacer(Modifier.height(AppSpacing.small))
+    OutlinedTextField(
+        value = apiKey,
+        onValueChange = { apiKey = it },
+        modifier = Modifier.fillMaxWidth(),
+        label = { Text(keyLabel) },
+        visualTransformation = PasswordVisualTransformation(),
+        keyboardOptions = KeyboardOptions(
+            autoCorrectEnabled = false,
+            keyboardType = KeyboardType.Password,
+        ),
+        singleLine = true,
+    )
+    (if (inputMissing) requiredText else error)?.let {
+        Spacer(Modifier.height(AppSpacing.small))
+        Text(it, color = MaterialTheme.colorScheme.error)
+    }
+    Spacer(Modifier.height(AppSpacing.small))
+    Row(
+        modifier = Modifier.horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(AppSpacing.small),
+    ) {
+        Button(
+            onClick = {
+                onSave(apiKey)
+                apiKey = ""
+            },
+            enabled = apiKey.isNotBlank(),
+        ) {
+            Text(stringResource(R.string.settings_provider_save_key))
+        }
+        TextButton(
+            onClick = { showClearConfirmation = true },
+            enabled = hasKey,
+        ) {
+            Text(stringResource(R.string.settings_provider_clear_key))
+        }
+    }
+    if (showClearConfirmation) {
+        AlertDialog(
+            onDismissRequest = { showClearConfirmation = false },
+            title = { Text(clearTitle) },
+            text = { Text(clearBody) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showClearConfirmation = false
+                        onClear()
+                    },
+                ) {
+                    Text(stringResource(R.string.settings_provider_clear_confirm))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showClearConfirmation = false }) {
+                    Text(stringResource(R.string.settings_provider_clear_cancel))
+                }
+            },
+        )
+    }
+}
+
+@Composable
 private fun <T> ProviderSelector(
     title: String,
     options: List<T>,
@@ -643,6 +822,7 @@ private fun <T> ProviderSelector(
     )
     Spacer(Modifier.height(AppSpacing.extraSmall))
     Row(
+        modifier = Modifier.horizontalScroll(rememberScrollState()),
         horizontalArrangement = Arrangement.spacedBy(AppSpacing.small),
     ) {
         options.forEach { option ->

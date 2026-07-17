@@ -515,6 +515,8 @@ private fun DataSource.displayName(): String = when (this) {
     DataSource.TENCENT -> stringResource(R.string.source_tencent)
     DataSource.SINA -> stringResource(R.string.source_sina)
     DataSource.YAHOO_FINANCE -> stringResource(R.string.source_yahoo_finance)
+    DataSource.FINNHUB -> stringResource(R.string.source_finnhub)
+    DataSource.FMP -> stringResource(R.string.source_fmp)
     DataSource.ALPACA_IEX -> stringResource(R.string.source_alpaca_iex)
     DataSource.LOCAL_CALCULATION -> stringResource(R.string.source_local_calculation)
     DataSource.ONNX_RUNTIME -> stringResource(R.string.source_onnx_runtime)

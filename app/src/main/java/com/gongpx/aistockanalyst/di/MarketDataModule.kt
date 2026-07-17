@@ -9,6 +9,7 @@ import com.gongpx.aistockanalyst.data.MarketRepository
 import com.gongpx.aistockanalyst.data.RoomMarketRepository
 import com.gongpx.aistockanalyst.data.UserSelectedChartClient
 import com.gongpx.aistockanalyst.data.UserSelectedQuoteClient
+import com.gongpx.aistockanalyst.data.UserSelectedValuationClient
 import com.gongpx.aistockanalyst.database.MarketDatabase
 import com.gongpx.aistockanalyst.database.PriceBarDao
 import com.gongpx.aistockanalyst.database.QuoteDao
@@ -30,6 +31,10 @@ import com.gongpx.aistockanalyst.network.SinaQuoteClient
 import com.gongpx.aistockanalyst.network.TencentQuoteClient
 import com.gongpx.aistockanalyst.network.ValuationClient
 import com.gongpx.aistockanalyst.network.YahooFinanceClient
+import com.gongpx.aistockanalyst.network.FinnhubApiCredentials
+import com.gongpx.aistockanalyst.network.FinnhubValuationClient
+import com.gongpx.aistockanalyst.network.FmpApiCredentials
+import com.gongpx.aistockanalyst.network.FmpValuationClient
 import com.gongpx.aistockanalyst.update.AppUpdateChecker
 import com.gongpx.aistockanalyst.update.GitHubAppUpdateChecker
 import dagger.Module
@@ -58,6 +63,18 @@ private annotation class SinaQuotes
 @Qualifier
 @Retention(AnnotationRetention.BINARY)
 private annotation class AlpacaCharts
+
+@Qualifier
+@Retention(AnnotationRetention.BINARY)
+private annotation class YahooValuation
+
+@Qualifier
+@Retention(AnnotationRetention.BINARY)
+private annotation class FinnhubValuation
+
+@Qualifier
+@Retention(AnnotationRetention.BINARY)
+private annotation class FmpValuation
 
 @Module
 @InstallIn(SingletonComponent::class)
@@ -122,11 +139,60 @@ object MarketDataModule {
 
     @Provides
     @Singleton
-    fun provideValuationClient(
+    @YahooValuation
+    fun provideYahooValuationClient(
         service: RawHttpService,
         json: Json,
         clock: Clock,
     ): ValuationClient = YahooFinanceClient(service, json, clock)
+
+    @Provides
+    @Singleton
+    @FinnhubValuation
+    fun provideFinnhubValuationClient(
+        service: RawHttpService,
+        json: Json,
+        clock: Clock,
+        credentialsStore: MarketDataCredentialsStore,
+    ): ValuationClient = FinnhubValuationClient(
+        service = service,
+        json = json,
+        clock = clock,
+        credentialsProvider = {
+            credentialsStore.getFinnhubApiKey()?.let { FinnhubApiCredentials(it.value) }
+        },
+    )
+
+    @Provides
+    @Singleton
+    @FmpValuation
+    fun provideFmpValuationClient(
+        service: RawHttpService,
+        json: Json,
+        clock: Clock,
+        credentialsStore: MarketDataCredentialsStore,
+    ): ValuationClient = FmpValuationClient(
+        service = service,
+        json = json,
+        clock = clock,
+        credentialsProvider = {
+            credentialsStore.getFmpApiKey()?.let { FmpApiCredentials(it.value) }
+        },
+    )
+
+    @Provides
+    @Singleton
+    fun provideValuationClient(
+        settingsStore: MarketDataSourceSettingsStore,
+        @YahooValuation yahooClient: ValuationClient,
+        @FinnhubValuation finnhubClient: ValuationClient,
+        @FmpValuation fmpClient: ValuationClient,
+    ): ValuationClient = UserSelectedValuationClient(
+        settingsStore = settingsStore,
+        yahooClient = yahooClient,
+        finnhubClient = finnhubClient,
+        fmpClient = fmpClient,
+    )
 
     @Provides
     @Singleton
@@ -168,7 +234,8 @@ object MarketDataModule {
         context,
         MarketDatabase::class.java,
         "market.db",
-    ).build()
+    ).addMigrations(MarketDatabase.MIGRATION_2_3)
+        .build()
 
     @Provides
     @Singleton

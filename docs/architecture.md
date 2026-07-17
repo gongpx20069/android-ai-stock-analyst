@@ -39,7 +39,7 @@ Boundaries:
 ┌──────────────────── Native Android App ────────────────────┐
 │ Kotlin + Jetpack Compose + Material 3                      │
 │ Watchlist / Screening / AI / Me                            │
-│ Direct clients: Tencent / Sina / Alpaca IEX / Yahoo HTTP   │
+│ Direct clients: Tencent / Sina / Alpaca / valuation BYOK   │
 │ Room cache + repositories                                  │
 │ WorkManager refresh and screening pipeline                 │
 │ Local indicator engine + screening engine                  │
@@ -51,8 +51,8 @@ Boundaries:
 └───────────────┬──────────────────┬──────────────────┬───────┘
                 │ HTTPS             │ HTTPS            │ HTTPS
                 ▼                   ▼                  ▼
-        Tencent / Sina        Alpaca / Yahoo     Azure OpenAI
-        quotes only           IEX / valuation    user-configured endpoint
+        Tencent / Sina      Alpaca / Yahoo /     Azure OpenAI
+        quotes only         Finnhub / FMP        user-configured endpoint
 ```
 
 ### 2.1 Android runtime boundary
@@ -67,8 +67,8 @@ Boundaries:
   - live quotes from the user-selected `Auto`, Tencent-only, or Sina-only mode
   - OHLCV from optional Alpaca Basic with explicit Live IEX,
     non-consolidated-feed disclosure
-  - valuation and analyst fields from the independently selected valuation
-    provider; Yahoo Finance is the currently available implementation
+  - valuation and analyst fields from independently selected Yahoo Finance,
+    Finnhub BYOK, or Financial Modeling Prep (FMP) BYOK
 - DataStore persists quote, chart, and valuation provider choices separately.
   `Auto` is the default quote mode and uses Tencent first, then Sina only when
   Tencent fails or returns an unusable payload.
@@ -102,10 +102,17 @@ Boundaries:
   which is one exchange rather than consolidated SIP data; every chart and
   volume surface must disclose that limitation. Tencent remains quote-only
   because its US historical endpoints failed live contract validation.
-- Yahoo Finance `quoteSummary` is the currently available valuation provider
-  for target median price,
-  forward P/E, analyst coverage and rating, moving averages, and 52-week
-  fields. It is unofficial and may change without notice.
+- Yahoo Finance remains the default valuation provider. Finnhub and Financial
+  Modeling Prep (FMP) are independently selectable, opt-in BYOK alternatives.
+  Finnhub is technically capable of nearly all canonical valuation fields but
+  endpoint entitlement is not reliably documented. The verified FMP stable
+  contracts omit canonical forward P/E and target-aligned analyst count, so
+  those fields remain null and FMP snapshots are partial.
+- Finnhub and FMP keys are encrypted with Android-Keystore-backed AES-GCM and
+  are never stored in Room, ordinary DataStore, backups, source, or logs.
+- No selected valuation provider silently falls back to another provider.
+  Room stores valuation snapshots by symbol plus source so a provider switch
+  cannot relabel another provider's cache.
 - Azure OpenAI is called directly from Android only when the user has
   configured BYOK credentials.
 - No project server mediates these dependencies.
@@ -121,7 +128,7 @@ Boundaries:
 | A2 | Android architecture | Material 3 + MVVM/UDF + Coroutines/Flow + Hilt + Retrofit/OkHttp + Room/DataStore + Keystore | §2.1 |
 | A3 | Build baseline | Gradle Wrapper 9.4.1, Android Gradle Plugin 9.2.0, JDK 17, compile/target SDK 36, and minimum SDK 26 | Repository build files |
 | A4 | APK release contract | Local publishing and manually dispatched GitHub Actions share one release key and allocate the next `1.0.x` from remote `v1.0.x` tags; Android `versionCode` is `1_000_000 + x` | [`releasing.md`](releasing.md) |
-| B | Data approach | **User-controlled direct Android providers**: quote, chart, and valuation providers are configured independently in DataStore. Quote options are Auto (Tencent then Sina), Tencent-only, and Sina-only. Chart options are Not configured or Alpaca Basic Live IEX with encrypted BYOK credentials and mandatory non-consolidated disclosure. Yahoo Finance `quoteSummary` is the current valuation provider. Room caches normalized snapshots | [`data-sources.md`](data-sources.md) |
+| B | Data approach | **User-controlled direct Android providers**: quote, chart, and valuation providers are configured independently in DataStore. Quote options are Auto (Tencent then Sina), Tencent-only, and Sina-only. Chart options are Not configured or Alpaca Basic Live IEX. Valuation options are Yahoo Finance (default), Finnhub BYOK, and FMP BYOK. Explicit valuation choices never switch silently; Room caches snapshots by symbol and source | [`data-sources.md`](data-sources.md) |
 | B2 | Canonical symbol and time model | Use provider-specific symbol mapping at the edges; keep exchange-time-correct timestamps internally for DST, holidays, and bar boundaries; convert every displayed timestamp to the device local timezone | [`data-sources.md`](data-sources.md) |
 | B3 | Project-server boundary | No project server exists for the MVP or current architecture; runtime networking and processing stay local to Android | §2 |
 | B4 | Alpaca account connection | Keep direct BYOK onboarding: link to Alpaca's official signup and API-key dashboard, then let the user paste credentials for local encryption. Do not implement Alpaca Connect OAuth while its documented code exchange requires a client secret on a backend and provides no documented native PKCE flow | [`data-sources.md` §2.3](data-sources.md#23-alpaca-basic-live-iex-chart-contract) |
@@ -173,7 +180,7 @@ Boundaries:
 | Current price and live quote snapshot | User-selected Auto, Tencent, or Sina mode | 30-60 second polling | Show quote timestamp and actual source |
 | 1-minute bars and local completed 5-minute bars | Optional Alpaca Basic Live IEX; never describe as consolidated SIP | Every completed bar | Drive charts, indicators, screening signals, and `30m` inference |
 | 15-minute, 30-minute, 1-hour, 4-hour, daily, and monthly candles | Optional Alpaca Basic Live IEX; canonical Room storage | Refresh after provider publication | Multi-timeframe chart history with feed disclosure |
-| Analyst low/median/high targets, forward P/E, rating, analyst count, averages, and 52-week fields | User-selected valuation provider; Yahoo Finance currently available and cached locally in Room | Daily cache cadence | Show analyst range and AI summary outside the chart; degrade only valuation-dependent features on failure |
+| Analyst targets, valuation, rating, coverage, averages, and 52-week fields | User-selected Yahoo Finance, Finnhub BYOK, or FMP BYOK; provider-specific fields remain nullable | Daily cache cadence | Show actual source; never mix caches across providers; FMP omits forward P/E and target-aligned analyst count |
 | Screening refresh state | WorkManager plus Room | Background batched refreshes | Show progress, resumable status, and cache freshness |
 | 30-minute direction probability | ONNX Runtime Android intraday model | After each completed local 5-minute bar | Show horizon, probability, model version, and freshness |
 | 5-day direction probability | ONNX Runtime Android daily model | After each market close | Display separately from intraday probability |
@@ -203,7 +210,7 @@ metrics. For the full contract, see
 | [`../app/`](../app/) | Android application, four-tab Compose shell, Hilt graph, stock lookup/detail state, and Vico market chart | Implemented foundation plus first detail/chart slice |
 | [`../core/data/`](../core/data/) | Local-first repository and stale-cache refresh behavior | Implemented quote, valuation, and bar-history slices |
 | [`../core/database/`](../core/database/) | Room cache, DAOs, schema, and model mappings | Implemented quote, valuation, and bar-history slices |
-| [`../core/datastore/`](../core/datastore/) | Provider preferences and Android-Keystore-backed Alpaca credentials | Implemented |
+| [`../core/datastore/`](../core/datastore/) | Provider preferences and Android-Keystore-backed Alpaca, Finnhub, and FMP credentials | Implemented |
 | [`../core/model/`](../core/model/) | Canonical market-domain models | Implemented foundation |
 | [`../core/domain/`](../core/domain/) | Deterministic valuation, time, completed five-minute aggregation, MA50/200, Wilder RSI(14), 52-week positioning, and support/resistance | Implemented foundation |
 | [`../core/designsystem/`](../core/designsystem/) | Compose design tokens and theme | Implemented foundation |
@@ -228,8 +235,8 @@ remain.
 
 1. Create the Kotlin/Compose Android skeleton with the locked local-only
    module boundaries.
-2. Bring up Tencent and Sina quote clients, the Yahoo Finance HTTP client,
-   Room caches, and the canonical exchange-time model.
+2. Bring up Tencent and Sina quote clients, Yahoo/Finnhub/FMP valuation
+   clients, Room caches, and the canonical exchange-time model.
 3. Implement deterministic indicators, support/resistance, and the
    TradingView-inspired detail-page chart with
    `1m / 5m / 15m / 30m / 1h / 4h / 1D / 1M`

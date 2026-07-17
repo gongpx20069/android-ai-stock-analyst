@@ -217,7 +217,8 @@ Arbiter card
 - Independent market-data provider selectors:
   - Quotes: Auto (Tencent then Sina), Tencent-only, or Sina-only
   - Charts: Not configured, or Alpaca Basic with encrypted user credentials
-  - Valuation: Yahoo Finance in the current implementation
+  - Valuation: Yahoo Finance, Finnhub BYOK, or Financial Modeling Prep (FMP)
+    BYOK; Yahoo Finance remains the default
 - The Alpaca option always identifies its feed as Live IEX and
   non-consolidated. It must not imply that OHLCV or volume represents the full
   US SIP market.
@@ -226,6 +227,18 @@ Arbiter card
   secret, and states that the app uses the credentials only for market data
   and never places orders. Credentials remain encrypted locally and never pass
   through a project server.
+- Finnhub and FMP onboarding appears only when that valuation provider is
+  selected. Each flow links to the provider's official HTTPS signup and API
+  documentation, accepts one API key, shows saved or missing state, and
+  requires confirmation before clearing the encrypted local key.
+- The Finnhub and FMP onboarding text states only that the app uses the key for
+  valuation endpoints and encrypts it locally. It does not claim OAuth or
+  scoped-key access. It also warns that free endpoint entitlement and
+  permission to display user-fetched data in a public BYOK app can vary and
+  must be confirmed with the provider.
+- FMP onboarding explains that the verified stable endpoints do not provide a
+  canonical forward P/E or target-aligned analyst count, so FMP valuation can
+  be partial.
 - Provider choices persist locally. Explicit quote-provider modes surface
   failure and stale-cache state instead of silently switching providers.
 - A visible reset action restores provider defaults when stored settings cannot

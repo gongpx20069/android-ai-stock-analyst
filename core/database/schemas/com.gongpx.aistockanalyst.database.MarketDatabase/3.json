@@ -1,0 +1,341 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 3,
+    "identityHash": "cc7a033548f4f997b353ad7f7f97c799",
+    "entities": [
+      {
+        "tableName": "quote_snapshots",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`symbol` TEXT NOT NULL, `exchange` TEXT NOT NULL, `currentPrice` REAL NOT NULL, `previousClose` REAL, `open` REAL, `dayHigh` REAL, `dayLow` REAL, `change` REAL, `changePercent` REAL, `volume` INTEGER, `ttmPe` REAL, `marketCap` REAL, `fiftyTwoWeekLow` REAL, `fiftyTwoWeekHigh` REAL, `asOfEpochMillis` INTEGER NOT NULL, `fetchedAtEpochMillis` INTEGER NOT NULL, `staleAfterEpochMillis` INTEGER NOT NULL, `parseStatus` TEXT NOT NULL, `source` TEXT NOT NULL, PRIMARY KEY(`symbol`, `exchange`))",
+        "fields": [
+          {
+            "fieldPath": "symbol",
+            "columnName": "symbol",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "exchange",
+            "columnName": "exchange",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "currentPrice",
+            "columnName": "currentPrice",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "previousClose",
+            "columnName": "previousClose",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "open",
+            "columnName": "open",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "dayHigh",
+            "columnName": "dayHigh",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "dayLow",
+            "columnName": "dayLow",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "change",
+            "columnName": "change",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "changePercent",
+            "columnName": "changePercent",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "volume",
+            "columnName": "volume",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "ttmPe",
+            "columnName": "ttmPe",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "marketCap",
+            "columnName": "marketCap",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "fiftyTwoWeekLow",
+            "columnName": "fiftyTwoWeekLow",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "fiftyTwoWeekHigh",
+            "columnName": "fiftyTwoWeekHigh",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "asOfEpochMillis",
+            "columnName": "asOfEpochMillis",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "fetchedAtEpochMillis",
+            "columnName": "fetchedAtEpochMillis",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "staleAfterEpochMillis",
+            "columnName": "staleAfterEpochMillis",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "parseStatus",
+            "columnName": "parseStatus",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "source",
+            "columnName": "source",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "symbol",
+            "exchange"
+          ]
+        }
+      },
+      {
+        "tableName": "valuation_snapshots",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`symbol` TEXT NOT NULL, `targetLow` REAL, `targetMedian` REAL, `targetHigh` REAL, `forwardPe` REAL, `recommendationKey` TEXT, `analystCount` INTEGER, `fiftyDayAverage` REAL, `twoHundredDayAverage` REAL, `fiftyTwoWeekLow` REAL, `fiftyTwoWeekHigh` REAL, `marketCap` INTEGER, `averageDailyVolume3Month` INTEGER, `sector` TEXT, `industry` TEXT, `asOfEpochMillis` INTEGER NOT NULL, `fetchedAtEpochMillis` INTEGER NOT NULL, `staleAfterEpochMillis` INTEGER NOT NULL, `parseStatus` TEXT NOT NULL, `source` TEXT NOT NULL, PRIMARY KEY(`symbol`, `source`))",
+        "fields": [
+          {
+            "fieldPath": "symbol",
+            "columnName": "symbol",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "targetLow",
+            "columnName": "targetLow",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "targetMedian",
+            "columnName": "targetMedian",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "targetHigh",
+            "columnName": "targetHigh",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "forwardPe",
+            "columnName": "forwardPe",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "recommendationKey",
+            "columnName": "recommendationKey",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "analystCount",
+            "columnName": "analystCount",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "fiftyDayAverage",
+            "columnName": "fiftyDayAverage",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "twoHundredDayAverage",
+            "columnName": "twoHundredDayAverage",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "fiftyTwoWeekLow",
+            "columnName": "fiftyTwoWeekLow",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "fiftyTwoWeekHigh",
+            "columnName": "fiftyTwoWeekHigh",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "marketCap",
+            "columnName": "marketCap",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "averageDailyVolume3Month",
+            "columnName": "averageDailyVolume3Month",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "sector",
+            "columnName": "sector",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "industry",
+            "columnName": "industry",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "asOfEpochMillis",
+            "columnName": "asOfEpochMillis",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "fetchedAtEpochMillis",
+            "columnName": "fetchedAtEpochMillis",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "staleAfterEpochMillis",
+            "columnName": "staleAfterEpochMillis",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "parseStatus",
+            "columnName": "parseStatus",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "source",
+            "columnName": "source",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "symbol",
+            "source"
+          ]
+        }
+      },
+      {
+        "tableName": "price_bars",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`symbol` TEXT NOT NULL, `exchange` TEXT NOT NULL, `interval` TEXT NOT NULL, `startEpochMillis` INTEGER NOT NULL, `endExclusiveEpochMillis` INTEGER NOT NULL, `open` REAL NOT NULL, `high` REAL NOT NULL, `low` REAL NOT NULL, `close` REAL NOT NULL, `volume` INTEGER NOT NULL, `fetchedAtEpochMillis` INTEGER NOT NULL, `parseStatus` TEXT NOT NULL, `source` TEXT NOT NULL, PRIMARY KEY(`symbol`, `exchange`, `interval`, `startEpochMillis`))",
+        "fields": [
+          {
+            "fieldPath": "symbol",
+            "columnName": "symbol",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "exchange",
+            "columnName": "exchange",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "interval",
+            "columnName": "interval",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "startEpochMillis",
+            "columnName": "startEpochMillis",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "endExclusiveEpochMillis",
+            "columnName": "endExclusiveEpochMillis",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "open",
+            "columnName": "open",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "high",
+            "columnName": "high",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "low",
+            "columnName": "low",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "close",
+            "columnName": "close",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "volume",
+            "columnName": "volume",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "fetchedAtEpochMillis",
+            "columnName": "fetchedAtEpochMillis",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "parseStatus",
+            "columnName": "parseStatus",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "source",
+            "columnName": "source",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "symbol",
+            "exchange",
+            "interval",
+            "startEpochMillis"
+          ]
+        }
+      }
+    ],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'cc7a033548f4f997b353ad7f7f97c799')"
+    ]
+  }
+}

@@ -46,6 +46,10 @@ class ProviderPayloadException(
     cause: Throwable? = null,
 ) : ProviderException("$provider payload error: $message", cause)
 
+class ProviderTransportException(
+    provider: String,
+) : ProviderException("$provider request failed")
+
 internal fun Response<ResponseBody>.requireBody(provider: String): ResponseBody {
     if (!isSuccessful) {
         errorBody()?.close()

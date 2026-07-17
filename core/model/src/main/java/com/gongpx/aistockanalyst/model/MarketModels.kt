@@ -32,6 +32,8 @@ enum class DataSource {
     TENCENT,
     SINA,
     YAHOO_FINANCE,
+    FINNHUB,
+    FMP,
     ALPACA_IEX,
     LOCAL_CALCULATION,
     ONNX_RUNTIME,
@@ -50,6 +52,8 @@ enum class ChartProvider {
 
 enum class ValuationProvider {
     YAHOO_FINANCE,
+    FINNHUB,
+    FMP,
 }
 
 enum class AppLanguage(val languageTag: String) {
@@ -136,6 +140,9 @@ data class AnalystTargets(
         }
         if (median != null && high != null) {
             require(median <= high) { "Median target cannot exceed high target" }
+        }
+        if (low != null && high != null) {
+            require(low <= high) { "Low target cannot exceed high target" }
         }
     }
 }

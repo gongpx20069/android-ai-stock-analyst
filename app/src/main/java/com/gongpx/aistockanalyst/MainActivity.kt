@@ -50,6 +50,10 @@ class MainActivity : AppCompatActivity() {
                     onResetDataSourceSettings = viewModel::resetDataSourceSettings,
                     onSaveAlpacaCredentials = viewModel::saveAlpacaCredentials,
                     onClearAlpacaCredentials = viewModel::clearAlpacaCredentials,
+                    onSaveFinnhubApiKey = viewModel::saveFinnhubApiKey,
+                    onClearFinnhubApiKey = viewModel::clearFinnhubApiKey,
+                    onSaveFmpApiKey = viewModel::saveFmpApiKey,
+                    onClearFmpApiKey = viewModel::clearFmpApiKey,
                 )
             }
         }

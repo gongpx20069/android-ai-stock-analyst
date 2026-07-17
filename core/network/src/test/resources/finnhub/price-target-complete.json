@@ -1,0 +1,8 @@
+{
+  "symbol": "AAPL",
+  "targetHigh": 300.0,
+  "targetLow": 180.0,
+  "targetMedian": 240.0,
+  "numberAnalysts": 42,
+  "lastUpdated": "2026-07-15 00:00:00"
+}

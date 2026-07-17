@@ -3,6 +3,8 @@ package com.gongpx.aistockanalyst.ui
 import com.gongpx.aistockanalyst.datastore.AlpacaCredentials
 import com.gongpx.aistockanalyst.datastore.AppLanguageSettingsStore
 import com.gongpx.aistockanalyst.datastore.MarketDataCredentialsStore
+import com.gongpx.aistockanalyst.datastore.FinnhubApiKey
+import com.gongpx.aistockanalyst.datastore.FmpApiKey
 import com.gongpx.aistockanalyst.datastore.MarketDataSourceSettingsStore
 import com.gongpx.aistockanalyst.model.AppLanguage
 import com.gongpx.aistockanalyst.model.ChartProvider
@@ -123,4 +125,16 @@ private class FakeCredentialsStore : MarketDataCredentialsStore {
     override suspend fun setAlpacaCredentials(credentials: AlpacaCredentials) = Unit
 
     override suspend fun clearAlpacaCredentials() = Unit
+
+    override suspend fun getFinnhubApiKey(): FinnhubApiKey? = null
+
+    override suspend fun setFinnhubApiKey(apiKey: FinnhubApiKey) = Unit
+
+    override suspend fun clearFinnhubApiKey() = Unit
+
+    override suspend fun getFmpApiKey(): FmpApiKey? = null
+
+    override suspend fun setFmpApiKey(apiKey: FmpApiKey) = Unit
+
+    override suspend fun clearFmpApiKey() = Unit
 }

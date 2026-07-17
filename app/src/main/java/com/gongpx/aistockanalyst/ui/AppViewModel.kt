@@ -7,6 +7,8 @@ import com.gongpx.aistockanalyst.datastore.AlpacaCredentials
 import com.gongpx.aistockanalyst.datastore.AppLanguageSettingsStore
 import com.gongpx.aistockanalyst.datastore.CredentialsStorageException
 import com.gongpx.aistockanalyst.datastore.MarketDataCredentialsStore
+import com.gongpx.aistockanalyst.datastore.FinnhubApiKey
+import com.gongpx.aistockanalyst.datastore.FmpApiKey
 import com.gongpx.aistockanalyst.datastore.MarketDataSourceSettingsStore
 import com.gongpx.aistockanalyst.datastore.SettingsStorageException
 import com.gongpx.aistockanalyst.model.ChartProvider
@@ -29,9 +31,13 @@ data class SettingsUiState(
     val dataSources: MarketDataSourceSettings = MarketDataSourceSettings(),
     val appLanguage: AppLanguage = AppLanguage.SYSTEM,
     val hasAlpacaCredentials: Boolean = false,
+    val hasFinnhubApiKey: Boolean = false,
+    val hasFmpApiKey: Boolean = false,
     val storageError: String? = null,
     val credentialsError: String? = null,
     val credentialsInputMissing: Boolean = false,
+    val finnhubApiKeyInputMissing: Boolean = false,
+    val fmpApiKeyInputMissing: Boolean = false,
     val updateStatus: UpdateStatus = UpdateStatus.IDLE,
     val availableUpdate: AppUpdate? = null,
 )
@@ -207,12 +213,104 @@ class AppViewModel @Inject constructor(
         }
     }
 
+    fun saveFinnhubApiKey(apiKey: String) {
+        val normalized = apiKey.trim()
+        if (normalized.isEmpty()) {
+            mutableUiState.value = mutableUiState.value.copy(
+                credentialsError = null,
+                finnhubApiKeyInputMissing = true,
+            )
+            return
+        }
+        viewModelScope.launch {
+            try {
+                credentialsStore.setFinnhubApiKey(FinnhubApiKey(normalized))
+                mutableUiState.value = mutableUiState.value.copy(
+                    hasFinnhubApiKey = true,
+                    credentialsError = null,
+                    finnhubApiKeyInputMissing = false,
+                )
+            } catch (failure: CredentialsStorageException) {
+                mutableUiState.value = mutableUiState.value.copy(
+                    credentialsError = failure.message,
+                    finnhubApiKeyInputMissing = false,
+                )
+            }
+        }
+    }
+
+    fun clearFinnhubApiKey() {
+        viewModelScope.launch {
+            try {
+                credentialsStore.clearFinnhubApiKey()
+                mutableUiState.value = mutableUiState.value.copy(
+                    hasFinnhubApiKey = false,
+                    credentialsError = null,
+                    finnhubApiKeyInputMissing = false,
+                )
+            } catch (failure: CredentialsStorageException) {
+                mutableUiState.value = mutableUiState.value.copy(
+                    credentialsError = failure.message,
+                    finnhubApiKeyInputMissing = false,
+                )
+            }
+        }
+    }
+
+    fun saveFmpApiKey(apiKey: String) {
+        val normalized = apiKey.trim()
+        if (normalized.isEmpty()) {
+            mutableUiState.value = mutableUiState.value.copy(
+                credentialsError = null,
+                fmpApiKeyInputMissing = true,
+            )
+            return
+        }
+        viewModelScope.launch {
+            try {
+                credentialsStore.setFmpApiKey(FmpApiKey(normalized))
+                mutableUiState.value = mutableUiState.value.copy(
+                    hasFmpApiKey = true,
+                    credentialsError = null,
+                    fmpApiKeyInputMissing = false,
+                )
+            } catch (failure: CredentialsStorageException) {
+                mutableUiState.value = mutableUiState.value.copy(
+                    credentialsError = failure.message,
+                    fmpApiKeyInputMissing = false,
+                )
+            }
+        }
+    }
+
+    fun clearFmpApiKey() {
+        viewModelScope.launch {
+            try {
+                credentialsStore.clearFmpApiKey()
+                mutableUiState.value = mutableUiState.value.copy(
+                    hasFmpApiKey = false,
+                    credentialsError = null,
+                    fmpApiKeyInputMissing = false,
+                )
+            } catch (failure: CredentialsStorageException) {
+                mutableUiState.value = mutableUiState.value.copy(
+                    credentialsError = failure.message,
+                    fmpApiKeyInputMissing = false,
+                )
+            }
+        }
+    }
+
     private fun refreshCredentialsStatus() {
         viewModelScope.launch {
             try {
-                val hasCredentials = credentialsStore.getAlpacaCredentials() != null
+                val hasCredentials = credentialsStore.hasAlpacaCredentials()
+                val hasFinnhubApiKey = credentialsStore.hasFinnhubApiKey()
+                val hasFmpApiKey = credentialsStore.hasFmpApiKey()
                 mutableUiState.value = mutableUiState.value.copy(
                     hasAlpacaCredentials = hasCredentials,
+                    hasFinnhubApiKey = hasFinnhubApiKey,
+                    hasFmpApiKey = hasFmpApiKey,
                     credentialsError = null,
                     credentialsInputMissing = false,
                 )

@@ -1,0 +1,11 @@
+[
+  {
+    "symbol": "AAPL",
+    "yearHigh": 250.0,
+    "yearLow": 150.0,
+    "priceAvg50": 210.0,
+    "priceAvg200": 190.0,
+    "marketCap": 4000000000000,
+    "timestamp": 1784102400
+  }
+]

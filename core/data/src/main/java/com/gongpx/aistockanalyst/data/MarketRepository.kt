@@ -9,6 +9,7 @@ import com.gongpx.aistockanalyst.datastore.MarketDataSourceSettingsStore
 import com.gongpx.aistockanalyst.domain.PriceBarAggregator
 import com.gongpx.aistockanalyst.domain.PriceLevelCalculator
 import com.gongpx.aistockanalyst.domain.TechnicalIndicatorCalculator
+import com.gongpx.aistockanalyst.model.AnalystTargets
 import com.gongpx.aistockanalyst.model.BarInterval
 import com.gongpx.aistockanalyst.model.ChartProvider
 import com.gongpx.aistockanalyst.model.DataSource
@@ -20,15 +21,18 @@ import com.gongpx.aistockanalyst.model.QuoteSnapshot
 import com.gongpx.aistockanalyst.model.StockSymbol
 import com.gongpx.aistockanalyst.model.TechnicalIndicatorSnapshot
 import com.gongpx.aistockanalyst.model.ValuationSnapshot
+import com.gongpx.aistockanalyst.model.ValuationProvider
 import com.gongpx.aistockanalyst.network.QuoteClient
 import com.gongpx.aistockanalyst.network.ChartClient
 import com.gongpx.aistockanalyst.network.ValuationClient
 import java.io.IOException
 import java.time.Clock
 import java.time.Instant
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.flatMapLatest
 
 sealed interface RefreshResult<out T> {
     val value: T
@@ -101,8 +105,14 @@ class RoomMarketRepository(
     ): Flow<QuoteSnapshot?> = quoteDao.observe(symbol.value, exchange.name)
         .map { it?.toModel() }
 
+    @OptIn(ExperimentalCoroutinesApi::class)
     override fun observeValuation(symbol: StockSymbol): Flow<ValuationSnapshot?> =
-        valuationDao.observe(symbol.value).map { it?.toModel() }
+        settingsStore.settings.flatMapLatest { settings ->
+            valuationDao.observe(
+                symbol = symbol.value,
+                source = settings.valuationProvider.toDataSource().name,
+            )
+        }.map { it?.toModel() }
 
     override fun observeBars(
         symbol: StockSymbol,
@@ -195,29 +205,140 @@ class RoomMarketRepository(
 
     override suspend fun refreshValuation(
         symbol: StockSymbol,
-    ): RefreshResult<ValuationSnapshot> = try {
-        val valuation = valuationClient.fetchValuation(symbol)
-        val cached = valuationDao.get(symbol.value)?.toModel()
-        if (
-            valuation.parseStatus == ParseStatus.PARTIAL &&
-            cached?.parseStatus == ParseStatus.VALID
-        ) {
-            return RefreshResult.Cached(
+    ): RefreshResult<ValuationSnapshot> {
+        val source = settingsStore.current().valuationProvider.toDataSource()
+        return try {
+            val valuation = valuationClient.fetchValuation(symbol)
+            if (valuation.symbol != symbol || valuation.source != source) {
+                throw ValuationSourceMismatchException()
+            }
+            val cached = valuationDao.get(symbol.value, source.name)?.toModel()
+            if (
+                valuation.parseStatus == ParseStatus.PARTIAL &&
+                cached != null &&
+                cached.parseStatus == ParseStatus.VALID
+            ) {
+                return RefreshResult.Cached(
+                    value = cached,
+                    isStale = !clock.instant().isBefore(cached.staleAfter),
+                    failureMessage = "Valuation provider returned incomplete core fields",
+                )
+            }
+            val valueToStore = if (
+                valuation.parseStatus == ParseStatus.PARTIAL &&
+                cached?.parseStatus == ParseStatus.PARTIAL &&
+                valuation.losesFieldsFrom(cached)
+            ) {
+                valuation.mergeMissingFieldsFrom(cached)
+            } else {
+                valuation
+            }
+            valuationDao.upsert(valueToStore.toEntity())
+            RefreshResult.Fresh(valueToStore)
+        } catch (failure: IOException) {
+            val cached = valuationDao.get(symbol.value, source.name)?.toModel()
+                ?: throw failure
+            RefreshResult.Cached(
                 value = cached,
                 isStale = !clock.instant().isBefore(cached.staleAfter),
-                failureMessage = "Valuation provider returned incomplete core fields",
+                failureMessage = failure.message ?: "Valuation refresh failed",
             )
         }
-        valuationDao.upsert(valuation.toEntity())
-        RefreshResult.Fresh(valuation)
-    } catch (failure: IOException) {
-        val cached = valuationDao.get(symbol.value)?.toModel()
-            ?: throw failure
-        RefreshResult.Cached(
-            value = cached,
-            isStale = !clock.instant().isBefore(cached.staleAfter),
-            failureMessage = failure.message ?: "Valuation refresh failed",
+    }
+
+    private fun ValuationSnapshot.losesFieldsFrom(cached: ValuationSnapshot): Boolean =
+        targets.low == null && cached.targets.low != null ||
+            targets.median == null && cached.targets.median != null ||
+            targets.high == null && cached.targets.high != null ||
+            forwardPe == null && cached.forwardPe != null ||
+            recommendationKey == null && cached.recommendationKey != null ||
+            analystCount == null && cached.analystCount != null ||
+            fiftyDayAverage == null && cached.fiftyDayAverage != null ||
+            twoHundredDayAverage == null && cached.twoHundredDayAverage != null ||
+            fiftyTwoWeekLow == null && cached.fiftyTwoWeekLow != null ||
+            fiftyTwoWeekHigh == null && cached.fiftyTwoWeekHigh != null ||
+            marketCap == null && cached.marketCap != null ||
+            averageDailyVolume3Month == null && cached.averageDailyVolume3Month != null ||
+            sector == null && cached.sector != null ||
+            industry == null && cached.industry != null
+
+    private fun ValuationSnapshot.mergeMissingFieldsFrom(
+        cached: ValuationSnapshot,
+    ): ValuationSnapshot {
+        require(symbol == cached.symbol && source == cached.source) {
+            "Only matching valuation snapshots can be merged"
+        }
+        val mergedTargets = mergeTargets(targets, cached.targets)
+        val mergedFiftyTwoWeekRange = mergeOrderedRange(
+            currentLow = fiftyTwoWeekLow,
+            currentHigh = fiftyTwoWeekHigh,
+            cachedLow = cached.fiftyTwoWeekLow,
+            cachedHigh = cached.fiftyTwoWeekHigh,
         )
+        return copy(
+            targets = mergedTargets,
+            forwardPe = forwardPe ?: cached.forwardPe,
+            recommendationKey = recommendationKey ?: cached.recommendationKey,
+            analystCount = analystCount ?: cached.analystCount,
+            fiftyDayAverage = fiftyDayAverage ?: cached.fiftyDayAverage,
+            twoHundredDayAverage = twoHundredDayAverage ?: cached.twoHundredDayAverage,
+            fiftyTwoWeekLow = mergedFiftyTwoWeekRange.first,
+            fiftyTwoWeekHigh = mergedFiftyTwoWeekRange.second,
+            marketCap = marketCap ?: cached.marketCap,
+            averageDailyVolume3Month = averageDailyVolume3Month
+                ?: cached.averageDailyVolume3Month,
+            sector = sector ?: cached.sector,
+            industry = industry ?: cached.industry,
+            asOf = minOf(asOf, cached.asOf),
+        )
+    }
+
+    private fun mergeTargets(
+        current: AnalystTargets,
+        cached: AnalystTargets,
+    ): AnalystTargets {
+        var low = current.low
+        var median = current.median
+        var high = current.high
+        cached.low?.let { candidate ->
+            if (low == null && targetsAreOrdered(candidate, median, high)) {
+                low = candidate
+            }
+        }
+        cached.median?.let { candidate ->
+            if (median == null && targetsAreOrdered(low, candidate, high)) {
+                median = candidate
+            }
+        }
+        cached.high?.let { candidate ->
+            if (high == null && targetsAreOrdered(low, median, candidate)) {
+                high = candidate
+            }
+        }
+        return AnalystTargets(low = low, median = median, high = high)
+    }
+
+    private fun targetsAreOrdered(
+        low: Double?,
+        median: Double?,
+        high: Double?,
+    ): Boolean = (low == null || median == null || low <= median) &&
+        (median == null || high == null || median <= high) &&
+        (low == null || high == null || low <= high)
+
+    private fun mergeOrderedRange(
+        currentLow: Double?,
+        currentHigh: Double?,
+        cachedLow: Double?,
+        cachedHigh: Double?,
+    ): Pair<Double?, Double?> {
+        val low = currentLow ?: cachedLow
+        val high = currentHigh ?: cachedHigh
+        return if (low == null || high == null || low <= high) {
+            low to high
+        } else {
+            currentLow to currentHigh
+        }
     }
 
     override suspend fun refreshBars(
@@ -359,7 +480,17 @@ class RoomMarketRepository(
         ChartProvider.ALPACA_IEX -> DataSource.ALPACA_IEX
     }
 
+    private fun ValuationProvider.toDataSource(): DataSource = when (this) {
+        ValuationProvider.YAHOO_FINANCE -> DataSource.YAHOO_FINANCE
+        ValuationProvider.FINNHUB -> DataSource.FINNHUB
+        ValuationProvider.FMP -> DataSource.FMP
+    }
+
     private class ChartSourceMismatchException : IOException(
         "Chart provider returned bars from an unexpected source",
+    )
+
+    private class ValuationSourceMismatchException : IOException(
+        "Valuation provider returned a snapshot for an unexpected symbol or source",
     )
 }

@@ -1,0 +1,11 @@
+{
+  "symbol": "AAPL",
+  "metric": {
+    "forwardPE": 28.5,
+    "50DayMovingAverage": 210.0,
+    "200DayMovingAverage": 190.0,
+    "52WeekHigh": 250.0,
+    "52WeekLow": 150.0,
+    "marketCapitalization": 4000000.0
+  }
+}
