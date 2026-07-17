@@ -24,6 +24,13 @@ The app uses a split design on purpose: fast quote access comes from domestic
 quote endpoints, while slower-moving valuation data is normalized separately in
 local storage. No project server exists between the app and these providers.
 
+Vico is not a market-data company or account requirement. It is the in-app
+open-source rendering library. A separate chart-data provider is still needed
+because candlesticks require historical open, high, low, close, and volume
+records. The validated Tencent and Sina integrations currently supply quote
+snapshots, not a reliable multi-timeframe US OHLCV contract, so Alpaca Basic is
+the current optional BYOK source for those records.
+
 Provider choices are separate settings rather than one global source:
 
 - Quotes: `Auto` (default), Tencent-only, or Sina-only.

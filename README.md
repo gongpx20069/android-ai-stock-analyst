@@ -21,6 +21,11 @@ recommender.
   calculation, and ML inference run inside the Android app.
 - **User-selected data sources:** quote, chart, and valuation providers are
   configured independently and stored only on-device.
+- **English and Chinese UI:** follows the Android system language by default,
+  with an in-app override for English or Simplified Chinese.
+- **Direct update and feedback links:** checks this repository's latest GitHub
+  Release on launch or on demand, and links to the signed APK, Issues, and
+  maintainer email.
 - **BYOK Azure OpenAI:** users provide their own Endpoint, Key, Deployment,
   and API Version. The key is encrypted on-device and sent only to the
   configured Azure endpoint.
@@ -53,7 +58,9 @@ quote, valuation, support/resistance, technicals, and cached multi-timeframe
 bars. Its Vico chart renders neutral candlesticks and an independently scaled
 IEX volume histogram with device-local timestamps, pan/zoom, and reset-to-latest
 behavior. Watchlist persistence, screening, chart probability overlays, and
-ONNX inference remain to be implemented.
+ONNX inference remain to be implemented. The app UI now supports English and
+Simplified Chinese, follows the system by default, and exposes GitHub Release
+update checks plus Issue and email feedback links in Me.
 
 ## Documentation
 

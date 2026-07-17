@@ -208,8 +208,12 @@ Arbiter card
 - The analyst target-range card and final AI summary remain outside the market
   chart, even when the AI page is opened from chart context.
 
+<a id="45-me-settings-page"></a>
 ### 4.5 Me settings page
 
+- App language: Follow system, English, or Simplified Chinese. Changing the
+  choice applies the Android per-app locale immediately and persists
+  independently from provider settings.
 - Independent market-data provider selectors:
   - Quotes: Auto (Tencent then Sina), Tencent-only, or Sina-only
   - Charts: Not configured, or Alpaca Basic with encrypted user credentials
@@ -228,6 +232,11 @@ Arbiter card
   rollback to the previous valid model
 - Preference toggles for discipline reminders and cost-saving mode
 - About, freshness, and disclaimer entry points
+- App updates: automatic launch check plus a manual action. When a newer
+  GitHub Release exists, show the version and an APK download button.
+- Feedback: explicitly welcome feature requests, bug reports, improvement
+  ideas, and development collaboration; link to this repository's new-Issue
+  page and display a mail action for `gongpx20069@vip.qq.com`.
 
 ---
 

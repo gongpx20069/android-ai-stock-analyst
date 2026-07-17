@@ -47,6 +47,7 @@ Boundaries:
 │ On-device 3+1 Azure orchestration                          │
 │ Vico + Compose overlays: candlesticks, volume, probability │
 │ line, crosshair, pan/zoom, landscape                       │
+│ GitHub Release update metadata and signed APK link         │
 └───────────────┬──────────────────┬──────────────────┬───────┘
                 │ HTTPS             │ HTTPS            │ HTTPS
                 ▼                   ▼                  ▼
@@ -86,6 +87,12 @@ Boundaries:
 - Vico Compose provides the candlestick, line, and column base layers; Compose
   overlays and custom drawing add the crosshair, labeled probability line,
   indicator layers, and TradingView-inspired interactions.
+- App resources support English and Simplified Chinese. The default follows
+  Android system locales; a persisted per-app override may select either
+  language without changing market-data preferences.
+- The app checks this repository's latest non-prerelease GitHub Release at
+  launch and on demand. It validates repository-owned HTTPS release and APK
+  URLs before exposing the external download action.
 
 ### 2.2 External dependency boundary
 
@@ -130,6 +137,8 @@ Boundaries:
 | U1 | Navigation structure | Four active bottom tabs: Watchlist / Screening / AI / Me | [`design.md` §2](design.md#2-information-architecture-and-page-map) |
 | U2 | Valuation color semantics | Red = expensive or chasing highs, green = valuation upside; always pair color with icon and text | [MASTER §2](design-system/ai-stock-analyst/MASTER.md#2-semantic-layer-reversed-valuation-colors-the-projects-core) |
 | U6 | Screening MVP behavior | Screening is a full, visible MVP tab with working NASDAQ, NYSE, and NYSE American refresh, progress, and results; it is not hidden or deferred | [`design.md` §4.3](design.md#43-screening-page) |
+| U7 | Language behavior | English and Simplified Chinese are supported; follow the Android system by default and allow a persisted per-app override in Me | [`design.md` §4.5](design.md#45-me-settings-page) |
+| U8 | Updates and feedback | Check the repository's latest GitHub Release automatically and manually; link only to validated project APK assets, GitHub Issues, and the documented maintainer email | [`design.md` §4.5](design.md#45-me-settings-page) |
 | V1 | Market chart | TradingView-inspired reference for interaction density and information hierarchy; never copy proprietary code, assets, or branding | [`design.md` §6](design.md#6-chart-design-and-visualization-checklist) |
 | V2 | Chart implementation | Vico Compose base layers plus Compose overlay and custom drawing; do not integrate the proprietary TradingView Charting Library | [`design.md` §6.1](design.md#61-kotlin-compose-chart-technology-choice) |
 | V3 | Exact chart timeframes and layers | Support minute/hour/day/month families with `1m / 5m / 15m / 30m / 1h / 4h / 1D / 1M`; show candlesticks, volume histogram, and a labeled LightGBM probability line; do not promise weekly in the MVP | [`design.md` §6](design.md#6-chart-design-and-visualization-checklist) |

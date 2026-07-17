@@ -44,6 +44,7 @@ data class StockDetailUiState(
     val bars: List<PriceBar> = emptyList(),
     val isRefreshing: Boolean = false,
     val message: String? = null,
+    val invalidSymbol: Boolean = false,
 )
 
 @HiltViewModel
@@ -70,9 +71,12 @@ class StockDetailViewModel @Inject constructor(
     ) {
         val symbol = try {
             StockSymbol.of(rawSymbol)
-        } catch (failure: IllegalArgumentException) {
+        } catch (_: IllegalArgumentException) {
             mutableUiState.update {
-                it.copy(message = failure.message ?: "Invalid US stock symbol")
+                it.copy(
+                    message = null,
+                    invalidSymbol = true,
+                )
             }
             return
         }

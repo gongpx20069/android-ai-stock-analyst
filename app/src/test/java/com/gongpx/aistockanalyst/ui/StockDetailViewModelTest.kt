@@ -162,7 +162,8 @@ class StockDetailViewModelTest {
         viewModel.openStock("\$bad", Exchange.NYSE)
         advanceUntilIdle()
 
-        assertTrue(viewModel.uiState.value.message.orEmpty().contains("Invalid US stock symbol"))
+        assertTrue(viewModel.uiState.value.invalidSymbol)
+        assertEquals(null, viewModel.uiState.value.message)
         assertTrue(repository.barRefreshes.isEmpty())
         assertTrue(repository.observedIntervals.isEmpty())
         viewModel.closeStock()

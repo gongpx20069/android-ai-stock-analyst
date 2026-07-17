@@ -118,6 +118,7 @@ android {
     }
 
     buildFeatures {
+        buildConfig = true
         compose = true
     }
 
@@ -137,6 +138,7 @@ dependencies {
     implementation(project(":core:network"))
 
     implementation(libs.activity.compose)
+    implementation(libs.appcompat)
     implementation(platform(libs.compose.bom))
     implementation(libs.compose.material.icons.extended)
     implementation(libs.compose.material3)

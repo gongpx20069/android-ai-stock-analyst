@@ -2,16 +2,22 @@ package com.gongpx.aistockanalyst.ui
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.gongpx.aistockanalyst.BuildConfig
 import com.gongpx.aistockanalyst.datastore.AlpacaCredentials
+import com.gongpx.aistockanalyst.datastore.AppLanguageSettingsStore
 import com.gongpx.aistockanalyst.datastore.CredentialsStorageException
 import com.gongpx.aistockanalyst.datastore.MarketDataCredentialsStore
 import com.gongpx.aistockanalyst.datastore.MarketDataSourceSettingsStore
 import com.gongpx.aistockanalyst.datastore.SettingsStorageException
 import com.gongpx.aistockanalyst.model.ChartProvider
+import com.gongpx.aistockanalyst.model.AppLanguage
 import com.gongpx.aistockanalyst.model.MarketDataSourceSettings
 import com.gongpx.aistockanalyst.model.QuoteProvider
 import com.gongpx.aistockanalyst.model.ValuationProvider
+import com.gongpx.aistockanalyst.update.AppUpdate
+import com.gongpx.aistockanalyst.update.AppUpdateChecker
 import dagger.hilt.android.lifecycle.HiltViewModel
+import java.io.IOException
 import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -21,23 +27,58 @@ import kotlinx.coroutines.launch
 
 data class SettingsUiState(
     val dataSources: MarketDataSourceSettings = MarketDataSourceSettings(),
+    val appLanguage: AppLanguage = AppLanguage.SYSTEM,
     val hasAlpacaCredentials: Boolean = false,
     val storageError: String? = null,
     val credentialsError: String? = null,
+    val credentialsInputMissing: Boolean = false,
+    val updateStatus: UpdateStatus = UpdateStatus.IDLE,
+    val availableUpdate: AppUpdate? = null,
 )
+
+enum class UpdateStatus {
+    IDLE,
+    CHECKING,
+    UP_TO_DATE,
+    AVAILABLE,
+    FAILED,
+}
 
 @HiltViewModel
 class AppViewModel @Inject constructor(
     private val settingsStore: MarketDataSourceSettingsStore,
+    private val languageSettingsStore: AppLanguageSettingsStore,
     private val credentialsStore: MarketDataCredentialsStore,
+    private val appUpdateChecker: AppUpdateChecker,
 ) : ViewModel() {
     private val mutableUiState = MutableStateFlow(SettingsUiState())
     val uiState: StateFlow<SettingsUiState> = mutableUiState.asStateFlow()
     private var settingsObservationJob: Job? = null
+    private var languageObservationJob: Job? = null
 
     init {
         observeSettings()
+        observeLanguage()
         refreshCredentialsStatus()
+        checkForUpdates()
+    }
+
+    private fun observeLanguage() {
+        languageObservationJob?.cancel()
+        languageObservationJob = viewModelScope.launch {
+            try {
+                languageSettingsStore.language.collect { language ->
+                    mutableUiState.value = mutableUiState.value.copy(
+                        appLanguage = language,
+                        storageError = null,
+                    )
+                }
+            } catch (failure: SettingsStorageException) {
+                mutableUiState.value = mutableUiState.value.copy(
+                    storageError = failure.message,
+                )
+            }
+        }
     }
 
     private fun observeSettings() {
@@ -70,6 +111,45 @@ class AppViewModel @Inject constructor(
         updateSettings { settingsStore.setValuationProvider(provider) }
     }
 
+    fun setAppLanguage(language: AppLanguage) {
+        viewModelScope.launch {
+            try {
+                languageSettingsStore.setLanguage(language)
+            } catch (failure: SettingsStorageException) {
+                mutableUiState.value = mutableUiState.value.copy(
+                    storageError = failure.message,
+                )
+            }
+        }
+    }
+
+    fun checkForUpdates() {
+        if (mutableUiState.value.updateStatus == UpdateStatus.CHECKING) {
+            return
+        }
+        viewModelScope.launch {
+            mutableUiState.value = mutableUiState.value.copy(
+                updateStatus = UpdateStatus.CHECKING,
+            )
+            try {
+                val update = appUpdateChecker.check(BuildConfig.VERSION_NAME)
+                mutableUiState.value = mutableUiState.value.copy(
+                    updateStatus = if (update == null) {
+                        UpdateStatus.UP_TO_DATE
+                    } else {
+                        UpdateStatus.AVAILABLE
+                    },
+                    availableUpdate = update,
+                )
+            } catch (_: IOException) {
+                mutableUiState.value = mutableUiState.value.copy(
+                    updateStatus = UpdateStatus.FAILED,
+                    availableUpdate = null,
+                )
+            }
+        }
+    }
+
     fun resetDataSourceSettings() {
         updateSettings(settingsStore::resetToDefaults)
     }
@@ -82,7 +162,8 @@ class AppViewModel @Inject constructor(
         val normalizedSecret = secretKey.trim()
         if (normalizedKeyId.isEmpty() || normalizedSecret.isEmpty()) {
             mutableUiState.value = mutableUiState.value.copy(
-                credentialsError = "Alpaca key ID and secret key are required",
+                credentialsError = null,
+                credentialsInputMissing = true,
             )
             return
         }
@@ -97,10 +178,12 @@ class AppViewModel @Inject constructor(
                 mutableUiState.value = mutableUiState.value.copy(
                     hasAlpacaCredentials = true,
                     credentialsError = null,
+                    credentialsInputMissing = false,
                 )
             } catch (failure: CredentialsStorageException) {
                 mutableUiState.value = mutableUiState.value.copy(
                     credentialsError = failure.message,
+                    credentialsInputMissing = false,
                 )
             }
         }
@@ -113,10 +196,12 @@ class AppViewModel @Inject constructor(
                 mutableUiState.value = mutableUiState.value.copy(
                     hasAlpacaCredentials = false,
                     credentialsError = null,
+                    credentialsInputMissing = false,
                 )
             } catch (failure: CredentialsStorageException) {
                 mutableUiState.value = mutableUiState.value.copy(
                     credentialsError = failure.message,
+                    credentialsInputMissing = false,
                 )
             }
         }
@@ -129,10 +214,12 @@ class AppViewModel @Inject constructor(
                 mutableUiState.value = mutableUiState.value.copy(
                     hasAlpacaCredentials = hasCredentials,
                     credentialsError = null,
+                    credentialsInputMissing = false,
                 )
             } catch (failure: CredentialsStorageException) {
                 mutableUiState.value = mutableUiState.value.copy(
                     credentialsError = failure.message,
+                    credentialsInputMissing = false,
                 )
             }
         }

@@ -37,6 +37,7 @@ import com.gongpx.aistockanalyst.R
 import com.gongpx.aistockanalyst.designsystem.theme.AppColors
 import com.gongpx.aistockanalyst.designsystem.theme.AppSpacing
 import com.gongpx.aistockanalyst.model.BarInterval
+import com.gongpx.aistockanalyst.model.DataSource
 import com.gongpx.aistockanalyst.model.Exchange
 import com.gongpx.aistockanalyst.model.PriceBar
 import com.gongpx.aistockanalyst.model.PriceLevel
@@ -62,6 +63,7 @@ internal fun WatchlistDestination(
         StockEntryScreen(
             contentPadding = contentPadding,
             message = state.message,
+            invalidSymbol = state.invalidSymbol,
             onOpenStock = onOpenStock,
         )
     } else {
@@ -79,6 +81,7 @@ internal fun WatchlistDestination(
 private fun StockEntryScreen(
     contentPadding: PaddingValues,
     message: String?,
+    invalidSymbol: Boolean,
     onOpenStock: (String, Exchange) -> Unit,
 ) {
     var symbol by rememberSaveable { mutableStateOf("") }
@@ -128,7 +131,12 @@ private fun StockEntryScreen(
                     )
                 }
             }
-            message?.let {
+            val displayedMessage = if (invalidSymbol) {
+                stringResource(R.string.invalid_stock_symbol)
+            } else {
+                message
+            }
+            displayedMessage?.let {
                 Spacer(Modifier.height(AppSpacing.small))
                 Text(text = it, color = MaterialTheme.colorScheme.error)
             }
@@ -293,7 +301,7 @@ private fun ValuationBlock(state: StockDetailUiState) {
             )
             DataRow(
                 stringResource(R.string.rating),
-                valuation.recommendationKey ?: MISSING_VALUE,
+                valuation.recommendationKey.recommendationDisplayName(),
             )
             DataRow(stringResource(R.string.as_of), valuation.asOf.asDeviceTime())
         }
@@ -336,7 +344,7 @@ private fun PriceLevelBlock(state: StockDetailUiState) {
                 .take(6)
                 .forEach { level ->
                     DataRow(
-                        level.labels.joinToString { it.displayName() },
+                        level.labels.map { it.displayName() }.joinToString(),
                         level.levelSummary(),
                     )
                 }
@@ -502,12 +510,49 @@ private fun BarInterval.shortLabel(): String = when (this) {
     BarInterval.ONE_MONTH -> "1M"
 }
 
-private fun com.gongpx.aistockanalyst.model.DataSource.displayName(): String =
-    name.replace('_', ' ')
+@Composable
+private fun DataSource.displayName(): String = when (this) {
+    DataSource.TENCENT -> stringResource(R.string.source_tencent)
+    DataSource.SINA -> stringResource(R.string.source_sina)
+    DataSource.YAHOO_FINANCE -> stringResource(R.string.source_yahoo_finance)
+    DataSource.ALPACA_IEX -> stringResource(R.string.source_alpaca_iex)
+    DataSource.LOCAL_CALCULATION -> stringResource(R.string.source_local_calculation)
+    DataSource.ONNX_RUNTIME -> stringResource(R.string.source_onnx_runtime)
+}
 
-private fun PriceLevelLabel.displayName(): String = name
-    .lowercase(Locale.US)
-    .replace('_', ' ')
+@Composable
+private fun PriceLevelLabel.displayName(): String = when (this) {
+    PriceLevelLabel.PIVOT_POINT -> stringResource(R.string.level_pivot_point)
+    PriceLevelLabel.PIVOT_R1 -> stringResource(R.string.level_pivot_r1)
+    PriceLevelLabel.PIVOT_R2 -> stringResource(R.string.level_pivot_r2)
+    PriceLevelLabel.PIVOT_R3 -> stringResource(R.string.level_pivot_r3)
+    PriceLevelLabel.PIVOT_S1 -> stringResource(R.string.level_pivot_s1)
+    PriceLevelLabel.PIVOT_S2 -> stringResource(R.string.level_pivot_s2)
+    PriceLevelLabel.PIVOT_S3 -> stringResource(R.string.level_pivot_s3)
+    PriceLevelLabel.SWING_HIGH -> stringResource(R.string.level_swing_high)
+    PriceLevelLabel.SWING_LOW -> stringResource(R.string.level_swing_low)
+    PriceLevelLabel.FIBONACCI_23_6 -> stringResource(R.string.level_fibonacci_23_6)
+    PriceLevelLabel.FIBONACCI_38_2 -> stringResource(R.string.level_fibonacci_38_2)
+    PriceLevelLabel.FIBONACCI_50_0 -> stringResource(R.string.level_fibonacci_50_0)
+    PriceLevelLabel.FIBONACCI_61_8 -> stringResource(R.string.level_fibonacci_61_8)
+    PriceLevelLabel.MA50 -> stringResource(R.string.level_ma50)
+    PriceLevelLabel.MA200 -> stringResource(R.string.level_ma200)
+    PriceLevelLabel.FIFTY_TWO_WEEK_HIGH -> stringResource(R.string.level_52_week_high)
+    PriceLevelLabel.FIFTY_TWO_WEEK_LOW -> stringResource(R.string.level_52_week_low)
+}
+
+@Composable
+private fun String?.recommendationDisplayName(): String = when (
+    this?.lowercase(Locale.US)
+) {
+    "strong_buy", "strongbuy" -> stringResource(R.string.rating_strong_buy)
+    "buy" -> stringResource(R.string.rating_buy)
+    "hold" -> stringResource(R.string.rating_hold)
+    "underperform" -> stringResource(R.string.rating_underperform)
+    "sell" -> stringResource(R.string.rating_sell)
+    null -> MISSING_VALUE
+    else -> this
+}
 
 private fun PriceLevel?.levelSummary(): String = this?.let {
     "${value.asPrice()} (${distanceFraction.asPercent()})"

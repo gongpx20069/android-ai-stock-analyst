@@ -14,6 +14,8 @@ import com.gongpx.aistockanalyst.database.PriceBarDao
 import com.gongpx.aistockanalyst.database.QuoteDao
 import com.gongpx.aistockanalyst.database.ValuationDao
 import com.gongpx.aistockanalyst.datastore.DataStoreMarketDataSourceSettings
+import com.gongpx.aistockanalyst.datastore.AppLanguageSettingsStore
+import com.gongpx.aistockanalyst.datastore.DataStoreAppLanguageSettings
 import com.gongpx.aistockanalyst.datastore.EncryptedMarketDataCredentialsStore
 import com.gongpx.aistockanalyst.datastore.MarketDataCredentialsStore
 import com.gongpx.aistockanalyst.datastore.MarketDataSourceSettingsStore
@@ -28,6 +30,8 @@ import com.gongpx.aistockanalyst.network.SinaQuoteClient
 import com.gongpx.aistockanalyst.network.TencentQuoteClient
 import com.gongpx.aistockanalyst.network.ValuationClient
 import com.gongpx.aistockanalyst.network.YahooFinanceClient
+import com.gongpx.aistockanalyst.update.AppUpdateChecker
+import com.gongpx.aistockanalyst.update.GitHubAppUpdateChecker
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -75,6 +79,13 @@ object MarketDataModule {
         .cookieJar(InMemoryCookieJar())
         .retryOnConnectionFailure(true)
         .build()
+
+    @Provides
+    @Singleton
+    fun provideAppUpdateChecker(
+        client: OkHttpClient,
+        json: Json,
+    ): AppUpdateChecker = GitHubAppUpdateChecker(client, json)
 
     @Provides
     @Singleton
@@ -170,6 +181,12 @@ object MarketDataModule {
     fun provideDataSourceSettingsStore(
         dataStore: DataStore<Preferences>,
     ): MarketDataSourceSettingsStore = DataStoreMarketDataSourceSettings(dataStore)
+
+    @Provides
+    @Singleton
+    fun provideAppLanguageSettingsStore(
+        dataStore: DataStore<Preferences>,
+    ): AppLanguageSettingsStore = DataStoreAppLanguageSettings(dataStore)
 
     @Provides
     @Singleton

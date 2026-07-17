@@ -1,6 +1,7 @@
 [versions]
 agp = "9.2.0"
 activityCompose = "1.13.0"
+appcompat = "1.7.1"
 composeBom = "2026.06.01"
 dataStore = "1.2.1"
 hilt = "2.60.1"
@@ -17,6 +18,7 @@ vico = "3.2.3"
 
 [libraries]
 activity-compose = { module = "androidx.activity:activity-compose", version.ref = "activityCompose" }
+appcompat = { module = "androidx.appcompat:appcompat", version.ref = "appcompat" }
 compose-bom = { module = "androidx.compose:compose-bom", version.ref = "composeBom" }
 compose-material-icons-extended = { module = "androidx.compose.material:material-icons-extended" }
 compose-material3 = { module = "androidx.compose.material3:material3" }

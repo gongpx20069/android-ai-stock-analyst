@@ -1,5 +1,7 @@
 package com.gongpx.aistockanalyst.ui
 
+import android.content.Context
+import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -10,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -39,6 +42,9 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.platform.UriHandler
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -47,6 +53,7 @@ import com.gongpx.aistockanalyst.R
 import com.gongpx.aistockanalyst.designsystem.theme.AppColors
 import com.gongpx.aistockanalyst.designsystem.theme.AppSpacing
 import com.gongpx.aistockanalyst.model.ChartProvider
+import com.gongpx.aistockanalyst.model.AppLanguage
 import com.gongpx.aistockanalyst.model.BarInterval
 import com.gongpx.aistockanalyst.model.Exchange
 import com.gongpx.aistockanalyst.model.QuoteProvider
@@ -70,6 +77,8 @@ fun AnalystApp(
     onCloseStock: () -> Unit,
     onRefreshStock: () -> Unit,
     onChartIntervalSelected: (BarInterval) -> Unit,
+    onAppLanguageSelected: (AppLanguage) -> Unit,
+    onCheckForUpdates: () -> Unit,
     onQuoteProviderSelected: (QuoteProvider) -> Unit,
     onChartProviderSelected: (ChartProvider) -> Unit,
     onValuationProviderSelected: (ValuationProvider) -> Unit,
@@ -77,6 +86,10 @@ fun AnalystApp(
     onSaveAlpacaCredentials: (String, String) -> Unit,
     onClearAlpacaCredentials: () -> Unit,
 ) {
+    val context = LocalContext.current
+    val uriHandler = LocalUriHandler.current
+    val availableUpdate = settingsState.availableUpdate
+    var dismissedUpdateVersion by rememberSaveable { mutableStateOf<String?>(null) }
     var destinationName by rememberSaveable {
         mutableStateOf(AppDestination.Watchlist.name)
     }
@@ -115,6 +128,8 @@ fun AnalystApp(
             AppDestination.Me -> SettingsScreen(
                 contentPadding = innerPadding,
                 settingsState = settingsState,
+                onAppLanguageSelected = onAppLanguageSelected,
+                onCheckForUpdates = onCheckForUpdates,
                 onQuoteProviderSelected = onQuoteProviderSelected,
                 onChartProviderSelected = onChartProviderSelected,
                 onValuationProviderSelected = onValuationProviderSelected,
@@ -123,6 +138,49 @@ fun AnalystApp(
                 onClearAlpacaCredentials = onClearAlpacaCredentials,
             )
         }
+    }
+
+    if (
+        settingsState.updateStatus == UpdateStatus.AVAILABLE &&
+        availableUpdate != null &&
+        dismissedUpdateVersion != availableUpdate.versionName
+    ) {
+        AlertDialog(
+            onDismissRequest = {
+                dismissedUpdateVersion = availableUpdate.versionName
+            },
+            title = { Text(stringResource(R.string.update_available_title)) },
+            text = {
+                Text(
+                    stringResource(
+                        R.string.update_available_body,
+                        availableUpdate.versionName,
+                    ),
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        openExternalUri(
+                            context = context,
+                            uriHandler = uriHandler,
+                            uri = availableUpdate.downloadUrl,
+                        )
+                    },
+                ) {
+                    Text(stringResource(R.string.download_update))
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        dismissedUpdateVersion = availableUpdate.versionName
+                    },
+                ) {
+                    Text(stringResource(R.string.later))
+                }
+            },
+        )
     }
 }
 
@@ -165,6 +223,8 @@ private fun AiScreen(contentPadding: PaddingValues) {
 private fun SettingsScreen(
     contentPadding: PaddingValues,
     settingsState: SettingsUiState,
+    onAppLanguageSelected: (AppLanguage) -> Unit,
+    onCheckForUpdates: () -> Unit,
     onQuoteProviderSelected: (QuoteProvider) -> Unit,
     onChartProviderSelected: (ChartProvider) -> Unit,
     onValuationProviderSelected: (ValuationProvider) -> Unit,
@@ -172,8 +232,37 @@ private fun SettingsScreen(
     onSaveAlpacaCredentials: (String, String) -> Unit,
     onClearAlpacaCredentials: () -> Unit,
 ) {
+    val context = LocalContext.current
+    val uriHandler = LocalUriHandler.current
     ScreenContainer(contentPadding) {
         ScreenTitle(stringResource(R.string.settings_title))
+        InformationCard {
+            Text(
+                text = stringResource(R.string.settings_language),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+            )
+            Spacer(Modifier.height(AppSpacing.small))
+            Text(
+                text = stringResource(R.string.settings_language_body),
+                color = AppColors.onSurfaceMuted,
+            )
+            Spacer(Modifier.height(AppSpacing.medium))
+            ProviderSelector(
+                title = stringResource(R.string.settings_language_choice),
+                options = AppLanguage.entries,
+                selected = settingsState.appLanguage,
+                label = { language ->
+                    when (language) {
+                        AppLanguage.SYSTEM -> stringResource(R.string.language_system)
+                        AppLanguage.ENGLISH -> stringResource(R.string.language_english)
+                        AppLanguage.SIMPLIFIED_CHINESE ->
+                            stringResource(R.string.language_simplified_chinese)
+                    }
+                },
+                onSelected = onAppLanguageSelected,
+            )
+        }
         InformationCard {
             Text(
                 text = stringResource(R.string.settings_data_sources),
@@ -219,6 +308,7 @@ private fun SettingsScreen(
                 AlpacaCredentialsEditor(
                     hasCredentials = settingsState.hasAlpacaCredentials,
                     error = settingsState.credentialsError,
+                    inputMissing = settingsState.credentialsInputMissing,
                     onSave = onSaveAlpacaCredentials,
                     onClear = onClearAlpacaCredentials,
                 )
@@ -267,6 +357,116 @@ private fun SettingsScreen(
                 color = AppColors.onSurfaceMuted,
             )
         }
+        InformationCard {
+            Text(
+                text = stringResource(R.string.settings_updates),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+            )
+            Spacer(Modifier.height(AppSpacing.small))
+            Text(
+                text = when (settingsState.updateStatus) {
+                    UpdateStatus.IDLE -> stringResource(R.string.update_not_checked)
+                    UpdateStatus.CHECKING -> stringResource(R.string.update_checking)
+                    UpdateStatus.UP_TO_DATE -> stringResource(R.string.update_up_to_date)
+                    UpdateStatus.AVAILABLE -> stringResource(
+                        R.string.update_available_version,
+                        settingsState.availableUpdate?.versionName.orEmpty(),
+                    )
+                    UpdateStatus.FAILED -> stringResource(R.string.update_check_failed)
+                },
+                color = AppColors.onSurfaceMuted,
+            )
+            Spacer(Modifier.height(AppSpacing.small))
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(AppSpacing.small),
+            ) {
+                Button(
+                    onClick = onCheckForUpdates,
+                    enabled = settingsState.updateStatus != UpdateStatus.CHECKING,
+                ) {
+                    Text(stringResource(R.string.check_for_updates))
+                }
+                settingsState.availableUpdate?.let { update ->
+                    TextButton(
+                        onClick = {
+                            openExternalUri(
+                                context = context,
+                                uriHandler = uriHandler,
+                                uri = update.downloadUrl,
+                            )
+                        },
+                    ) {
+                        Text(stringResource(R.string.download_update))
+                    }
+                }
+            }
+        }
+        InformationCard {
+            Text(
+                text = stringResource(R.string.settings_feedback),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+            )
+            Spacer(Modifier.height(AppSpacing.small))
+            Text(
+                text = stringResource(R.string.settings_feedback_body),
+                color = AppColors.onSurfaceMuted,
+            )
+            Spacer(Modifier.height(AppSpacing.small))
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(AppSpacing.small),
+            ) {
+                Button(
+                    onClick = {
+                        openExternalUri(
+                            context = context,
+                            uriHandler = uriHandler,
+                            uri = FEEDBACK_ISSUE_URL,
+                        )
+                    },
+                ) {
+                    Text(stringResource(R.string.feedback_github_issue))
+                }
+                TextButton(
+                    onClick = {
+                        openExternalUri(
+                            context = context,
+                            uriHandler = uriHandler,
+                            uri = FEEDBACK_EMAIL_URI,
+                        )
+                    },
+                ) {
+                    Text(stringResource(R.string.feedback_email))
+                }
+            }
+            Spacer(Modifier.height(AppSpacing.extraSmall))
+            Text(
+                text = FEEDBACK_EMAIL,
+                color = AppColors.onSurfaceMuted,
+            )
+        }
+    }
+}
+
+private const val FEEDBACK_ISSUE_URL =
+    "https://github.com/gongpx20069/android-ai-stock-analyst/issues/new"
+private const val FEEDBACK_EMAIL = "gongpx20069@vip.qq.com"
+private const val FEEDBACK_EMAIL_URI = "mailto:$FEEDBACK_EMAIL"
+
+private fun openExternalUri(
+    context: Context,
+    uriHandler: UriHandler,
+    uri: String,
+) {
+    try {
+        uriHandler.openUri(uri)
+    } catch (_: IllegalArgumentException) {
+        Toast.makeText(
+            context,
+            context.getString(R.string.external_app_unavailable),
+            Toast.LENGTH_SHORT,
+        ).show()
     }
 }
 
@@ -274,6 +474,7 @@ private fun SettingsScreen(
 private fun AlpacaCredentialsEditor(
     hasCredentials: Boolean,
     error: String?,
+    inputMissing: Boolean,
     onSave: (String, String) -> Unit,
     onClear: () -> Unit,
 ) {
@@ -315,7 +516,12 @@ private fun AlpacaCredentialsEditor(
         ),
         singleLine = true,
     )
-    error?.let {
+    val displayedError = if (inputMissing) {
+        stringResource(R.string.settings_alpaca_credentials_required)
+    } else {
+        error
+    }
+    displayedError?.let {
         Spacer(Modifier.height(AppSpacing.small))
         Text(
             text = it,
@@ -324,6 +530,7 @@ private fun AlpacaCredentialsEditor(
     }
     Spacer(Modifier.height(AppSpacing.small))
     Row(
+        modifier = Modifier.horizontalScroll(rememberScrollState()),
         horizontalArrangement = Arrangement.spacedBy(AppSpacing.small),
     ) {
         Button(

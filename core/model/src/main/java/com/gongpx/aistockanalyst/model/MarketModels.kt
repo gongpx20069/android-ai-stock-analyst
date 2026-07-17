@@ -52,6 +52,12 @@ enum class ValuationProvider {
     YAHOO_FINANCE,
 }
 
+enum class AppLanguage(val languageTag: String) {
+    SYSTEM(""),
+    ENGLISH("en"),
+    SIMPLIFIED_CHINESE("zh-CN"),
+}
+
 data class MarketDataSourceSettings(
     val quoteProvider: QuoteProvider = QuoteProvider.AUTO,
     val chartProvider: ChartProvider = ChartProvider.NOT_CONFIGURED,

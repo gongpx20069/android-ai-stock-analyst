@@ -49,6 +49,7 @@ import com.patrykandpatrick.vico.compose.common.component.rememberTextComponent
 import com.patrykandpatrick.vico.compose.m3.common.rememberM3VicoTheme
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import java.util.Locale
 import kotlinx.coroutines.launch
 
 @Composable
@@ -127,6 +128,8 @@ internal fun StockCandlestickChart(
         val volumeFormatter = remember {
             CartesianValueFormatter { _, value, _ -> formatVolume(value) }
         }
+        val markerOhlcFormat = stringResource(R.string.chart_marker_ohlc)
+        val markerVolumeFormat = stringResource(R.string.chart_marker_volume)
         val volumeRangeProvider = remember(chartData.volume) {
             CartesianLayerRangeProvider.fixed(
                 minY = 0.0,
@@ -135,16 +138,26 @@ internal fun StockCandlestickChart(
                     ?.times(VOLUME_SCALE_MULTIPLIER),
             )
         }
-        val markerValueFormatter = remember {
+        val markerValueFormatter = remember(markerOhlcFormat, markerVolumeFormat) {
             DefaultCartesianMarker.ValueFormatter { _, targets ->
                 targets.joinToString(separator = "\n") { target ->
                     when (target) {
                         is CandlestickCartesianLayerMarkerTarget -> with(target.entry) {
-                            "O ${formatChartPrice(opening)}  H ${formatChartPrice(high)}  " +
-                                "L ${formatChartPrice(low)}  C ${formatChartPrice(closing)}"
+                            String.format(
+                                Locale.getDefault(),
+                                markerOhlcFormat,
+                                formatChartPrice(opening),
+                                formatChartPrice(high),
+                                formatChartPrice(low),
+                                formatChartPrice(closing),
+                            )
                         }
                         is ColumnCartesianLayerMarkerTarget -> {
-                            "V ${formatVolume(target.columns.sumOf { it.entry.y })}"
+                            String.format(
+                                Locale.getDefault(),
+                                markerVolumeFormat,
+                                formatVolume(target.columns.sumOf { it.entry.y }),
+                            )
                         }
                         else -> ""
                     }

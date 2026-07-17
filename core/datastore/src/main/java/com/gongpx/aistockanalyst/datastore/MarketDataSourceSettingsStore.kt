@@ -2,6 +2,7 @@ package com.gongpx.aistockanalyst.datastore
 
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.MutablePreferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import com.gongpx.aistockanalyst.model.ChartProvider
@@ -55,7 +56,7 @@ class DataStoreMarketDataSourceSettings(
     override suspend fun resetToDefaults() {
         try {
             dataStore.edit { preferences ->
-                preferences.clear()
+                clearDataSourcePreferences(preferences)
             }
         } catch (failure: IOException) {
             throw SettingsStorageException("Unable to reset data source settings", failure)
@@ -100,6 +101,12 @@ class DataStoreMarketDataSourceSettings(
         private val CHART_PROVIDER = stringPreferencesKey("chart_provider")
         private val VALUATION_PROVIDER = stringPreferencesKey("valuation_provider")
     }
+}
+
+internal fun clearDataSourcePreferences(preferences: MutablePreferences) {
+    preferences.remove(stringPreferencesKey("quote_provider"))
+    preferences.remove(stringPreferencesKey("chart_provider"))
+    preferences.remove(stringPreferencesKey("valuation_provider"))
 }
 
 private fun parseChartProvider(storedValue: String): ChartProvider = when (storedValue) {
