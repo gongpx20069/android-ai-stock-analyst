@@ -15,7 +15,7 @@
     <string name="invalid_stock_symbol">请输入有效的美股代码。</string>
     <string name="open_stock_detail">打开详情</string>
     <string name="stock_data_requirements">刷新图表前</string>
-    <string name="stock_data_requirements_body">请在“我的”中选择 Alpaca Live IEX，并保存自己的凭据。行情和估值数据源仍可独立选择。Vico 只负责本地绘图，Alpaca 提供历史 OHLCV 数据。</string>
+    <string name="stock_data_requirements_body">K 线图不能只靠当前价格生成，它需要一段历史的开盘、最高、最低、收盘和成交量数据。Vico 只负责把应用已有的数据绘制出来，本身不提供行情。腾讯和新浪目前在本项目中能可靠提供行情快照，但没有可启用且可靠的美股多周期历史 K 线接口。由于本应用仅在本地运行，没有项目服务器或内置行情库，如需加载图表历史，请在“我的”中选择可选的 Alpaca Live IEX，并保存自己的凭据。</string>
     <string name="change_stock">更换</string>
     <string name="refresh">刷新</string>
     <string name="latest_quote">最新行情</string>
@@ -81,6 +81,7 @@
     <string name="settings_data_sources_body">行情、图表数据和估值数据源可独立选择。Vico 在应用内负责绘图；图表数据源提供历史 OHLCV。所有选择仅保存在本设备。</string>
     <string name="settings_quote_provider">实时行情</string>
     <string name="settings_chart_provider">历史图表数据</string>
+    <string name="settings_chart_provider_explanation">为什么需要外部数据源？K 线图需要一段历史的开盘、最高、最低、收盘和成交量数据，只获取当前价格并不够。Vico 只在本地绘制这些数据，本身不提供行情。腾讯和新浪在本项目中用于行情快照，但其美股历史 K 线接口可靠性不足，因此没有启用。本应用没有项目服务器，所以图表历史必须来自单独的数据源。Alpaca Live IEX 是当前可选的 BYOK 数据源；不配置时仅停用历史图表。</string>
     <string name="settings_valuation_provider">估值与分析师数据</string>
     <string name="provider_auto">自动回退</string>
     <string name="provider_tencent">腾讯</string>

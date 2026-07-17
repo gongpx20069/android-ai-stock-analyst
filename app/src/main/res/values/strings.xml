@@ -15,7 +15,7 @@
     <string name="invalid_stock_symbol">Enter a valid US stock ticker.</string>
     <string name="open_stock_detail">Open detail</string>
     <string name="stock_data_requirements">Before refreshing charts</string>
-    <string name="stock_data_requirements_body">Select Alpaca Live IEX and save your own credentials in Me. Quote and valuation providers remain independent. Vico renders the chart locally; Alpaca supplies historical OHLCV.</string>
+    <string name="stock_data_requirements_body">A candlestick chart cannot be built from the current price alone; it needs historical open, high, low, close, and volume records. Vico only renders data already supplied to the app. Tencent and Sina currently provide reliable quote snapshots here, but not a reliable multi-timeframe US historical-bar contract. Because this local-only app has no project server or bundled market-data feed, select the optional Alpaca Live IEX source and save your own credentials in Me to load chart history.</string>
     <string name="change_stock">Change</string>
     <string name="refresh">Refresh</string>
     <string name="latest_quote">Latest quote</string>
@@ -81,6 +81,7 @@
     <string name="settings_data_sources_body">Choose quote, chart-data, and valuation providers independently. Vico renders charts inside the app; the chart-data provider supplies historical OHLCV. Each choice is stored only on this device.</string>
     <string name="settings_quote_provider">Live quotes</string>
     <string name="settings_chart_provider">Historical chart data</string>
+    <string name="settings_chart_provider_explanation">Why is an external source needed? Candlesticks require a history of open, high, low, close, and volume values; a current quote is not enough. Vico only draws those records locally and does not provide market data. Tencent and Sina are used here for quote snapshots, but their US historical-bar interfaces were not reliable enough to activate. This serverless app therefore needs a separate data source for chart history. Alpaca Live IEX is the current optional BYOK source; leaving it unconfigured disables historical charts.</string>
     <string name="settings_valuation_provider">Valuation and analyst data</string>
     <string name="provider_auto">Auto fallback</string>
     <string name="provider_tencent">Tencent</string>

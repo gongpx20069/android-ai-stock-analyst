@@ -303,6 +303,11 @@ private fun SettingsScreen(
                 },
                 onSelected = onChartProviderSelected,
             )
+            Spacer(Modifier.height(AppSpacing.small))
+            Text(
+                text = stringResource(R.string.settings_chart_provider_explanation),
+                color = AppColors.onSurfaceMuted,
+            )
             if (settingsState.dataSources.chartProvider == ChartProvider.ALPACA_IEX) {
                 Spacer(Modifier.height(AppSpacing.medium))
                 AlpacaCredentialsEditor(
