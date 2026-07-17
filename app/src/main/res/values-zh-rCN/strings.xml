@@ -89,6 +89,11 @@
     <string name="provider_yahoo_finance">Yahoo Finance</string>
     <string name="provider_not_configured">未配置</string>
     <string name="provider_alpaca_iex">Alpaca（Live IEX）</string>
+    <string name="settings_alpaca_setup_title">连接你的 Alpaca 行情数据账号</string>
+    <string name="settings_alpaca_setup_body">1. 免费注册 Alpaca 账号。2. 打开 Dashboard，找到 API Keys，然后选择 Generate New Keys。3. 将 API Key ID 和 Secret Key 复制回此处；Secret Key 仅在生成时显示。</string>
+    <string name="settings_alpaca_create_account">免费注册账号</string>
+    <string name="settings_alpaca_open_dashboard">打开 API Keys</string>
+    <string name="settings_alpaca_security">App 只使用这些凭据访问 Alpaca Market Data API，绝不会下单。凭据仅在本设备加密保存，也不会发送到项目服务器。</string>
     <string name="settings_alpaca_disclosure">Live IEX 仅来自一个交易所，不是全美综合市场数据。OHLCV 和成交量会与 SIP 汇总值不同。</string>
     <string name="settings_alpaca_credentials_saved">Alpaca 凭据已在本设备加密保存。</string>
     <string name="settings_alpaca_credentials_missing">刷新图表前需要填写 Alpaca 凭据。</string>

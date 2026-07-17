@@ -458,6 +458,9 @@ private const val FEEDBACK_ISSUE_URL =
     "https://github.com/gongpx20069/android-ai-stock-analyst/issues/new"
 private const val FEEDBACK_EMAIL = "gongpx20069@vip.qq.com"
 private const val FEEDBACK_EMAIL_URI = "mailto:$FEEDBACK_EMAIL"
+private const val ALPACA_SIGN_UP_URL = "https://app.alpaca.markets/signup"
+private const val ALPACA_DASHBOARD_URL =
+    "https://app.alpaca.markets/brokerage/dashboard/overview"
 
 private fun openExternalUri(
     context: Context,
@@ -483,10 +486,56 @@ private fun AlpacaCredentialsEditor(
     onSave: (String, String) -> Unit,
     onClear: () -> Unit,
 ) {
+    val context = LocalContext.current
+    val uriHandler = LocalUriHandler.current
     var keyId by remember { mutableStateOf("") }
     var secretKey by remember { mutableStateOf("") }
     var showClearConfirmation by rememberSaveable { mutableStateOf(false) }
 
+    Text(
+        text = stringResource(R.string.settings_alpaca_setup_title),
+        style = MaterialTheme.typography.titleSmall,
+        fontWeight = FontWeight.SemiBold,
+    )
+    Spacer(Modifier.height(AppSpacing.extraSmall))
+    Text(
+        text = stringResource(R.string.settings_alpaca_setup_body),
+        color = AppColors.onSurfaceMuted,
+    )
+    Spacer(Modifier.height(AppSpacing.small))
+    Row(
+        modifier = Modifier.horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(AppSpacing.small),
+    ) {
+        Button(
+            onClick = {
+                openExternalUri(
+                    context = context,
+                    uriHandler = uriHandler,
+                    uri = ALPACA_SIGN_UP_URL,
+                )
+            },
+        ) {
+            Text(stringResource(R.string.settings_alpaca_create_account))
+        }
+        TextButton(
+            onClick = {
+                openExternalUri(
+                    context = context,
+                    uriHandler = uriHandler,
+                    uri = ALPACA_DASHBOARD_URL,
+                )
+            },
+        ) {
+            Text(stringResource(R.string.settings_alpaca_open_dashboard))
+        }
+    }
+    Spacer(Modifier.height(AppSpacing.small))
+    Text(
+        text = stringResource(R.string.settings_alpaca_security),
+        color = AppColors.onSurfaceMuted,
+    )
+    Spacer(Modifier.height(AppSpacing.medium))
     Text(
         text = stringResource(R.string.settings_alpaca_disclosure),
         color = AppColors.onSurfaceMuted,

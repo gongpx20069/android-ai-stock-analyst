@@ -221,6 +221,11 @@ Arbiter card
 - The Alpaca option always identifies its feed as Live IEX and
   non-consolidated. It must not imply that OHLCV or volume represents the full
   US SIP market.
+- Alpaca onboarding links to the official free-account signup and Dashboard
+  API-key surfaces, explains how to generate and paste the one-time-visible
+  secret, and states that the app uses the credentials only for market data
+  and never places orders. Credentials remain encrypted locally and never pass
+  through a project server.
 - Provider choices persist locally. Explicit quote-provider modes surface
   failure and stale-cache state instead of silently switching providers.
 - A visible reset action restores provider defaults when stored settings cannot

@@ -89,6 +89,11 @@
     <string name="provider_yahoo_finance">Yahoo Finance</string>
     <string name="provider_not_configured">Not configured</string>
     <string name="provider_alpaca_iex">Alpaca (Live IEX)</string>
+    <string name="settings_alpaca_setup_title">Connect your Alpaca market-data account</string>
+    <string name="settings_alpaca_setup_body">1. Create a free Alpaca account. 2. Open the Dashboard, find API Keys, and select Generate New Keys. 3. Copy the API Key ID and Secret Key back here; Alpaca displays the secret only when it is generated.</string>
+    <string name="settings_alpaca_create_account">Create free account</string>
+    <string name="settings_alpaca_open_dashboard">Open API Keys</string>
+    <string name="settings_alpaca_security">The app uses these credentials only with Alpaca’s Market Data API and never places orders. They are encrypted on this device and never sent to a project server.</string>
     <string name="settings_alpaca_disclosure">Live IEX data comes from one exchange and is not consolidated US-market data. OHLCV and volume will differ from SIP totals.</string>
     <string name="settings_alpaca_credentials_saved">Alpaca credentials are encrypted on this device.</string>
     <string name="settings_alpaca_credentials_missing">Alpaca credentials are required before charts can refresh.</string>

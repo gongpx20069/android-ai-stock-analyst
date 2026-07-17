@@ -100,6 +100,20 @@ The app encrypts both values with an AES-GCM key held by Android Keystore.
 Credentials must not appear in URLs, logs, Room, DataStore, backups, or source
 control.
 
+The Me page guides the user through the direct BYOK setup:
+
+1. Open Alpaca's official account-registration page.
+2. Open the official Dashboard, find **API Keys**, and generate a new key pair.
+3. Copy the API Key ID and one-time-visible Secret Key into the app.
+4. Encrypt the pair locally and use it only with Alpaca Market Data requests.
+
+The app uses these credentials only with Market Data endpoints. It never calls
+trading or order endpoints and never sends the credentials to a project server.
+Alpaca Connect OAuth is not used because its documented authorization-code
+exchange requires `client_secret` and directs that exchange to a backend; its
+Connect documentation does not define PKCE or another secretless native-client
+flow. Embedding that shared secret in an open-source APK would expose it.
+
 Historical bars use:
 
 ```text
@@ -145,6 +159,10 @@ Alpaca Basic limitations are product-visible:
 
 Official contract references:
 
+- [Create an Alpaca account](https://app.alpaca.markets/signup)
+- [Dashboard API Keys](https://app.alpaca.markets/brokerage/dashboard/overview)
+- [Getting started with Market Data](https://docs.alpaca.markets/us/docs/getting-started-with-alpaca-market-data)
+- [Alpaca Connect OAuth](https://docs.alpaca.markets/us/docs/using-oauth2-and-trading-api)
 - [Historical stock bars](https://docs.alpaca.markets/us/reference/stockbars)
 - [Market Data API plans](https://docs.alpaca.markets/us/docs/about-market-data-api)
 - [Historical stock data and feeds](https://docs.alpaca.markets/us/docs/historical-stock-data-1)
