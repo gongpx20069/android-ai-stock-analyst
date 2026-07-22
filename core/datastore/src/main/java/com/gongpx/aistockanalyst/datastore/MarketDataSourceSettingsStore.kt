@@ -91,7 +91,7 @@ internal fun marketDataSourceSettings(preferences: Preferences): MarketDataSourc
                 ?: QuoteProvider.AUTO,
             chartProvider = preferences[stringPreferencesKey("chart_provider")]
                 ?.let(::parseChartProvider)
-                ?: ChartProvider.NOT_CONFIGURED,
+                ?: ChartProvider.EASTMONEY_EXPERIMENTAL,
             valuationProvider = preferences[stringPreferencesKey("valuation_provider")]
                 ?.let(ValuationProvider::valueOf)
                 ?: ValuationProvider.YAHOO_FINANCE,

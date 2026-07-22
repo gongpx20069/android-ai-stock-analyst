@@ -49,8 +49,9 @@ The information architecture is four active bottom-tab destinations in the MVP.
 | **AI** | AI interpretation page | Run deeper 3+1 interpretation for one stock | Medium |
 | **Me** | Settings page | Configure BYOK Azure settings, watchlists, and preference toggles | Low |
 
-There is one second-level page: the **stock detail page**, entered from any
-list.
+A selected stock expands research content inside the **Watchlist page**. The
+current implementation does not create a separate stock-detail navigation
+destination.
 
 ---
 
@@ -58,15 +59,15 @@ list.
 
 | # | Feature from docs | Hosting page | Hosting component or interaction |
 |---|---|---|---|
-| 1 | Market data | Watchlist and detail | Current price row, quote timestamp, and live chart entry |
-| 2 | Valuation snapshot | Watchlist and detail | Upside summary, forward P/E, rating, and analyst count |
-| 3 | Support and resistance | Detail | Numeric cards plus level chart with resonance emphasis |
-| 4 | Technicals | Detail | Folded block for MA, RSI, and 52-week position |
+| 1 | Market data | Watchlist | Stock-code controls, current price row, quote timestamp, and live chart |
+| 2 | Valuation snapshot | Watchlist | Upside summary, forward P/E, rating, and analyst count |
+| 3 | Support and resistance | Watchlist selection | Numeric cards plus level chart with resonance emphasis |
+| 4 | Technicals | Watchlist selection | Folded block for MA, RSI, and 52-week position |
 | 5 | Screening funnel | Screening | Quick templates, optional controls, background refresh state, and ranked results |
 | 6 | 3+1 multi-agent AI | AI page | Streaming agent cards plus a final arbiter card |
-| 7 | ML direction probability | Detail | Collapsed ML reference block and chart probability-line placement |
+| 7 | ML direction probability | Watchlist selection | Collapsed ML reference block and chart probability-line placement |
 | 8 | BYOK Azure settings | Me | Four-field form, test action, and local-only storage messaging |
-| 9 | Live market chart | Detail | TradingView-inspired chart, gesture model, and probability-line placement |
+| 9 | Live market chart | Watchlist selection | First data card after stock-code controls, with gesture model and probability-line placement |
 | 10 | Behavioral counterweights | Watchlist, detail, AI, and settings | Context-specific reminders and a discipline toggle |
 | 11 | Watchlist management | Watchlist and Me | Add/remove actions, list state, and valuation-health summary |
 
@@ -79,64 +80,73 @@ list.
 **Top-to-bottom layout**
 
 ```text
-Valuation health summary
-Tracked stock cards
-  ├─ upside and valuation row
-  ├─ distance to support / resistance
-  └─ de-emphasized daily change
+Stock-code input and exchange controls
+Refresh / progress / provider error
+Expanded market chart
+Quote
+Valuation
+Support and resistance
+Technicals
 ```
 
-- Each card is one decision unit.
-- Valuation information sits above daily price change.
-- Tapping a card opens the stock detail page.
-- A short valuation-health sentence should summarize whether tracked names still
-  have room or need caution.
-- Charts on this page: upside bars and concise valuation-position summaries.
+- Keep the stock-code input and exchange controls visible after selection.
+- Prefill the selected symbol and exchange where practical; preserve keyboard
+  submission, Change/clear, refresh, scrolling, and restored Compose state.
+- Before selection, show the input card and concise guidance that charts need
+  historical OHLCV.
+- After selection, render refresh progress or provider error immediately below
+  the input card, then the expanded market chart as the first data card.
+- Quote, valuation, support/resistance, and technical cards follow the chart.
+- Do not duplicate the stock input or chart and do not navigate to a separate
+  detail destination.
 
 <a id="42-stock-detail-page-secondary-level-highest-information-density"></a>
-### 4.2 Stock detail page secondary level highest information density
+### 4.2 Selected-stock research blocks on Watchlist
 
 Use folded blocks so the most important facts appear first:
 
 ```text
-1. Valuation snapshot, expanded by default
-2. Support and resistance, expanded by default
-3. Technicals, collapsed
-4. AI interpretation entry
-5. ML reference, collapsed
-6. Live market chart, expanded
+1. Live market chart, expanded
+2. Quote
+3. Valuation snapshot, expanded by default
+4. Support and resistance, expanded by default
+5. Technicals, collapsed
+6. AI interpretation entry
+7. ML reference, collapsed
 ```
 
 Block details:
 
-1. **Valuation snapshot**
+1. **Live market chart**
+   - fixed immediately below the Watchlist input/status area
+   - shortcuts are `1m / 5m / 15m / 30m / 1h / 4h / 1D / 1M`
+   - minute, hour, day, and month views remain exchange-time correct while
+     displayed timestamps follow the device local timezone
+   - candlesticks and volume are shown together
+   - disclosure follows actual bars or the selected provider: Eastmoney
+     Experimental or Alpaca Live IEX; it must never be hardcoded to Alpaca
+2. **Quote**
+   - current price, previous close, source, and timestamp
+3. **Valuation snapshot**
    - current price
    - analyst low / median / high targets
    - upside percent
    - forward P/E
    - rating
    - analyst count
-2. **Support and resistance**
+4. **Support and resistance**
    - distance to nearest support
    - distance to nearest resistance
    - level chart with resonance emphasis
-3. **Technicals**
+5. **Technicals**
    - MA50 / MA200
    - RSI
    - 52-week position
-4. **AI interpretation entry**
+6. **AI interpretation entry**
    - opens the AI page using the user's Azure setup
-5. **ML reference**
+7. **ML reference**
    - probability, horizon, version, freshness, and clear subordinate labeling
    - contract lives in [`analysis.md` §4.3](analysis.md#43-live-inference-and-visualization-contract)
-6. **Live market chart**
-   - chart placement is fixed here
-   - shortcuts are `1m / 5m / 15m / 30m / 1h / 4h / 1D / 1M`
-   - minute, hour, day, and month views must remain exchange-time correct while
-     displayed timestamps follow the device local timezone
-   - the chart must show candlesticks, volume histogram, and a LightGBM
-     direction-probability line with its own labeled scale or sub-panel
-
 Each block should start with a short plain-language summary. Charts on this
 page include the current-price vs target view, support/resistance level chart,
 optional rating distribution, live market chart, and ML probability view.
@@ -216,12 +226,17 @@ Arbiter card
   independently from provider settings.
 - Independent market-data provider selectors:
   - Quotes: Auto (Tencent then Sina), Tencent-only, or Sina-only
-  - Charts: Not configured, or Alpaca Basic with encrypted user credentials
+  - Charts: Eastmoney Experimental (default, no account), Not configured, or
+    Alpaca Basic with encrypted user credentials
   - Valuation: Yahoo Finance, Finnhub BYOK, or Financial Modeling Prep (FMP)
     BYOK; Yahoo Finance remains the default
 - The Alpaca option always identifies its feed as Live IEX and
   non-consolidated. It must not imply that OHLCV or volume represents the full
   US SIP market.
+- The Eastmoney option identifies the source, no-account design, unofficial
+  experimental interface, short observed intraday retention, unknown
+  quota/stability, open-source-derived client contract, non-open data license,
+  and absence of silent fallback or source mixing.
 - Alpaca onboarding links to the official free-account signup and Dashboard
   API-key surfaces, explains how to generate and paste the one-time-visible
   secret, and states that the app uses the credentials only for market data
@@ -299,11 +314,12 @@ overlay and interaction model.
 
 **Current implementation slice**
 
-- Stock lookup opens a detail state that observes quote, valuation, technical,
-  support/resistance, and timeframe-specific Room flows.
+- Stock lookup expands the same Watchlist page while keeping the input controls
+  visible. It observes quote, valuation, technical, support/resistance, and
+  timeframe-specific source-isolated Room flows.
 - The initial Vico chart supports all eight timeframe shortcuts, neutral
   hollow/filled candlesticks, device-local time labels, a dollar price axis,
-  and an independently scaled IEX-volume end axis.
+  and an independently scaled selected-source volume end axis.
 - Drag/pinch interaction comes from Vico, and the visible reset action restores
   the initial zoom and jumps to the latest bar.
 - Crosshair-synchronized OHLCV, per-symbol timeframe persistence, landscape
@@ -374,7 +390,7 @@ ML-specific charts and the prediction contract remain owned by
 | Analyst range card | `targetLowPrice`, `targetMedianPrice`, `targetHighPrice`, `numberOfAnalystOpinions`, freshness | Normalized fundamental snapshot |
 | AI forecast summary card | `horizonOutlooks`, confidence, evidence, watch conditions | Validated arbiter output from [`ai-prompt.md`](ai-prompt.md) |
 | Forward P/E comparison | `forwardPE` | Fundamental snapshot |
-| Live market chart | Intraday and higher-timeframe OHLCV, volume, and optional `30m` probability line | User-selected Alpaca Basic Live IEX bars, with the non-consolidated feed disclosed according to [`data-sources.md` §2.3](data-sources.md#23-alpaca-basic-live-iex-chart-contract), plus local prediction snapshots from [`analysis.md` §4.3](analysis.md#43-live-inference-and-visualization-contract) |
+| Live market chart | Intraday and higher-timeframe OHLCV, volume, and optional `30m` probability line | User-selected Eastmoney Experimental bars under [`data-sources.md` §2.3](data-sources.md#23-eastmoney-experimental-us-chart-contract) or Alpaca Basic Live IEX bars under [`data-sources.md` §2.4](data-sources.md#24-alpaca-basic-live-iex-chart-contract), plus local prediction snapshots from [`analysis.md` §4.3](analysis.md#43-live-inference-and-visualization-contract) |
 | LightGBM probability line | `probabilityUp`, `asOf`, `horizon`, `modelVersion` | Local prediction snapshots from [`analysis.md` §4.3](analysis.md#43-live-inference-and-visualization-contract) |
 
 ---
@@ -385,7 +401,7 @@ ML-specific charts and the prediction contract remain owned by
 | State | Design |
 |---|---|
 | First open / empty | Guide the user to add a first watchlist stock and configure Azure only if AI is wanted |
-| Key not configured | The affected Azure or Alpaca feature stays disabled with a direct path to settings; unrelated cached facts still work |
+| Key not configured | The affected Azure or Alpaca feature stays disabled with a direct path to settings; no-account Eastmoney and unrelated cached facts remain independent |
 | Loading | Show skeletons for valuation data and streaming progress for AI |
 | Data temporarily unavailable | Keep the last good snapshot visible, show timestamps, and explain which layer failed |
 | Screening refresh | Show WorkManager progress, last completed stage, resumable status, and cache freshness |

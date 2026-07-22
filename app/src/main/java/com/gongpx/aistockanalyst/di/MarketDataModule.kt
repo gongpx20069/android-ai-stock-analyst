@@ -23,6 +23,9 @@ import com.gongpx.aistockanalyst.datastore.MarketDataSourceSettingsStore
 import com.gongpx.aistockanalyst.network.AlpacaApiCredentials
 import com.gongpx.aistockanalyst.network.AlpacaChartClient
 import com.gongpx.aistockanalyst.network.ChartClient
+import com.gongpx.aistockanalyst.network.EastmoneyChartClient
+import com.gongpx.aistockanalyst.network.EastmoneySecIdResolver
+import com.gongpx.aistockanalyst.network.EastmoneySymbolResolver
 import com.gongpx.aistockanalyst.network.InMemoryCookieJar
 import com.gongpx.aistockanalyst.network.MarketNetworkFactory
 import com.gongpx.aistockanalyst.network.QuoteClient
@@ -47,6 +50,7 @@ import javax.inject.Singleton
 import javax.inject.Qualifier
 import kotlinx.serialization.json.Json
 import okhttp3.OkHttpClient
+import okhttp3.CookieJar
 
 private val Context.marketDataSourceSettings by preferencesDataStore(
     name = "market_data_sources",
@@ -63,6 +67,14 @@ private annotation class SinaQuotes
 @Qualifier
 @Retention(AnnotationRetention.BINARY)
 private annotation class AlpacaCharts
+
+@Qualifier
+@Retention(AnnotationRetention.BINARY)
+private annotation class EastmoneyCharts
+
+@Qualifier
+@Retention(AnnotationRetention.BINARY)
+private annotation class EastmoneyHttp
 
 @Qualifier
 @Retention(AnnotationRetention.BINARY)
@@ -108,6 +120,16 @@ object MarketDataModule {
     @Singleton
     fun provideRawHttpService(client: OkHttpClient): RawHttpService =
         MarketNetworkFactory.createRawHttpService(client)
+
+    @Provides
+    @Singleton
+    @EastmoneyHttp
+    fun provideEastmoneyRawHttpService(client: OkHttpClient): RawHttpService =
+        MarketNetworkFactory.createRawHttpService(
+            client.newBuilder()
+                .cookieJar(CookieJar.NO_COOKIES)
+                .build(),
+        )
 
     @Provides
     @Singleton
@@ -218,12 +240,36 @@ object MarketDataModule {
 
     @Provides
     @Singleton
+    fun provideEastmoneySecIdResolver(
+        @EastmoneyHttp service: RawHttpService,
+        json: Json,
+    ): EastmoneySecIdResolver = EastmoneySymbolResolver(service, json)
+
+    @Provides
+    @Singleton
+    @EastmoneyCharts
+    fun provideEastmoneyChartClient(
+        @EastmoneyHttp service: RawHttpService,
+        json: Json,
+        clock: Clock,
+        resolver: EastmoneySecIdResolver,
+    ): ChartClient = EastmoneyChartClient(
+        service = service,
+        json = json,
+        clock = clock,
+        symbolResolver = resolver,
+    )
+
+    @Provides
+    @Singleton
     fun provideChartClient(
         settingsStore: MarketDataSourceSettingsStore,
         @AlpacaCharts alpacaClient: ChartClient,
+        @EastmoneyCharts eastmoneyClient: ChartClient,
     ): ChartClient = UserSelectedChartClient(
         settingsStore = settingsStore,
         alpacaClient = alpacaClient,
+        eastmoneyClient = eastmoneyClient,
     )
 
     @Provides
@@ -234,7 +280,10 @@ object MarketDataModule {
         context,
         MarketDatabase::class.java,
         "market.db",
-    ).addMigrations(MarketDatabase.MIGRATION_2_3)
+    ).addMigrations(
+        MarketDatabase.MIGRATION_2_3,
+        MarketDatabase.MIGRATION_3_4,
+    )
         .build()
 
     @Provides

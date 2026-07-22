@@ -4,6 +4,7 @@ import com.gongpx.aistockanalyst.data.MarketRepository
 import com.gongpx.aistockanalyst.data.RefreshResult
 import com.gongpx.aistockanalyst.model.AnalystTargets
 import com.gongpx.aistockanalyst.model.BarInterval
+import com.gongpx.aistockanalyst.model.ChartProvider
 import com.gongpx.aistockanalyst.model.DataSource
 import com.gongpx.aistockanalyst.model.Exchange
 import com.gongpx.aistockanalyst.model.ParseStatus
@@ -105,6 +106,31 @@ class StockDetailViewModelTest {
         }
 
     @Test
+    fun `Eastmoney hour intervals use supported recent history`() = runTest(dispatcher) {
+        val repository = FakeMarketRepository(
+            now = now,
+            chartProviderValue = ChartProvider.EASTMONEY_EXPERIMENTAL,
+        )
+        val viewModel = viewModel(repository)
+        viewModel.openStock("IBM", Exchange.NYSE)
+        advanceUntilIdle()
+        repository.barRefreshes.clear()
+
+        viewModel.selectInterval(BarInterval.FOUR_HOURS)
+        advanceUntilIdle()
+
+        assertEquals(
+            BarRefresh(
+                interval = BarInterval.FOUR_HOURS,
+                start = now.minus(Duration.ofDays(30)),
+                endExclusive = now,
+            ),
+            repository.barRefreshes.single(),
+        )
+        viewModel.closeStock()
+    }
+
+    @Test
     fun `changing interval does not cancel quote valuation and daily refresh`() =
         runTest(dispatcher) {
             val quoteGate = CompletableDeferred<Unit>()
@@ -198,6 +224,7 @@ private data class BarRefresh(
 
 private class FakeMarketRepository(
     private val now: Instant,
+    chartProviderValue: ChartProvider = ChartProvider.ALPACA_IEX,
 ) : MarketRepository {
     val observedIntervals = mutableListOf<BarInterval>()
     val barRefreshes = mutableListOf<BarRefresh>()
@@ -211,6 +238,9 @@ private class FakeMarketRepository(
     private val bars = MutableStateFlow<List<PriceBar>>(emptyList())
     private val technicals = MutableStateFlow<TechnicalIndicatorSnapshot?>(null)
     private val priceLevels = MutableStateFlow<PriceLevelSnapshot?>(null)
+    private val chartProvider = MutableStateFlow(chartProviderValue)
+
+    override fun observeChartProvider(): Flow<ChartProvider> = chartProvider
 
     override fun observeQuote(
         symbol: StockSymbol,
@@ -305,4 +335,33 @@ private class FakeMarketRepository(
         barsFailure?.let { throw it }
         return barsResult
     }
+
+    override suspend fun preferredChartHistory(interval: BarInterval): Duration =
+        if (chartProvider.value == ChartProvider.EASTMONEY_EXPERIMENTAL) {
+            when (interval) {
+                BarInterval.ONE_MINUTE -> Duration.ofDays(1)
+                BarInterval.FIVE_MINUTES,
+                BarInterval.FIFTEEN_MINUTES,
+                BarInterval.THIRTY_MINUTES,
+                -> Duration.ofDays(7)
+                BarInterval.ONE_HOUR,
+                BarInterval.FOUR_HOURS,
+                -> Duration.ofDays(30)
+                BarInterval.ONE_DAY -> Duration.ofDays(400)
+                BarInterval.ONE_MONTH -> Duration.ofDays(3_650)
+            }
+        } else {
+            when (interval) {
+            BarInterval.ONE_MINUTE -> Duration.ofDays(1)
+            BarInterval.FIVE_MINUTES -> Duration.ofDays(5)
+            BarInterval.FIFTEEN_MINUTES,
+            BarInterval.THIRTY_MINUTES,
+            -> Duration.ofDays(30)
+            BarInterval.ONE_HOUR,
+            BarInterval.FOUR_HOURS,
+            -> Duration.ofDays(180)
+            BarInterval.ONE_DAY -> Duration.ofDays(400)
+            BarInterval.ONE_MONTH -> Duration.ofDays(3_650)
+            }
+        }
 }

@@ -39,7 +39,7 @@ Boundaries:
 ┌──────────────────── Native Android App ────────────────────┐
 │ Kotlin + Jetpack Compose + Material 3                      │
 │ Watchlist / Screening / AI / Me                            │
-│ Direct clients: Tencent / Sina / Alpaca / valuation BYOK   │
+│ Direct clients: Tencent / Sina / Eastmoney / Alpaca / BYOK │
 │ Room cache + repositories                                  │
 │ WorkManager refresh and screening pipeline                 │
 │ Local indicator engine + screening engine                  │
@@ -51,8 +51,8 @@ Boundaries:
 └───────────────┬──────────────────┬──────────────────┬───────┘
                 │ HTTPS             │ HTTPS            │ HTTPS
                 ▼                   ▼                  ▼
-        Tencent / Sina      Alpaca / Yahoo /     Azure OpenAI
-        quotes only         Finnhub / FMP        user-configured endpoint
+        Tencent / Sina      Eastmoney / Alpaca /  Azure OpenAI
+        quotes only         Yahoo / Finnhub / FMP user-configured endpoint
 ```
 
 ### 2.1 Android runtime boundary
@@ -65,8 +65,8 @@ Boundaries:
   and Azure key encryption.
 - Direct Android clients fetch:
   - live quotes from the user-selected `Auto`, Tencent-only, or Sina-only mode
-  - OHLCV from optional Alpaca Basic with explicit Live IEX,
-    non-consolidated-feed disclosure
+  - OHLCV from default no-account Eastmoney Experimental or optional Alpaca
+    Basic with explicit Live IEX, non-consolidated-feed disclosure
   - valuation and analyst fields from independently selected Yahoo Finance,
     Finnhub BYOK, or Financial Modeling Prep (FMP) BYOK
 - DataStore persists quote, chart, and valuation provider choices separately.
@@ -98,7 +98,12 @@ Boundaries:
 
 - Tencent and Sina are independently selectable live-quote providers. The
   default `Auto` mode treats Tencent as primary and Sina as fallback.
-- Alpaca Basic is the opt-in chart provider. It uses only the Live IEX feed,
+- Eastmoney Experimental is the default chart provider because it needs no
+  account. Its client uses unofficial interfaces derived from open-source
+  efinance/AKShare contracts, with short observed intraday retention and no
+  guarantee of quota or stability. This does not make Eastmoney data
+  open-licensed.
+- Alpaca Basic remains the opt-in BYOK chart provider. It uses only the Live IEX feed,
   which is one exchange rather than consolidated SIP data; every chart and
   volume surface must disclose that limitation. Tencent remains quote-only
   because its US historical endpoints failed live contract validation.
@@ -113,6 +118,8 @@ Boundaries:
 - No selected valuation provider silently falls back to another provider.
   Room stores valuation snapshots by symbol plus source so a provider switch
   cannot relabel another provider's cache.
+- No selected chart provider silently falls back or mixes bars. Room keys bar
+  history by symbol, exchange, interval, start, and source.
 - Azure OpenAI is called directly from Android only when the user has
   configured BYOK credentials.
 - No project server mediates these dependencies.
@@ -128,14 +135,15 @@ Boundaries:
 | A2 | Android architecture | Material 3 + MVVM/UDF + Coroutines/Flow + Hilt + Retrofit/OkHttp + Room/DataStore + Keystore | §2.1 |
 | A3 | Build baseline | Gradle Wrapper 9.4.1, Android Gradle Plugin 9.2.0, JDK 17, compile/target SDK 36, and minimum SDK 26 | Repository build files |
 | A4 | APK release contract | Local publishing and manually dispatched GitHub Actions share one release key and allocate the next `1.0.x` from remote `v1.0.x` tags; Android `versionCode` is `1_000_000 + x` | [`releasing.md`](releasing.md) |
-| B | Data approach | **User-controlled direct Android providers**: quote, chart, and valuation providers are configured independently in DataStore. Quote options are Auto (Tencent then Sina), Tencent-only, and Sina-only. Chart options are Not configured or Alpaca Basic Live IEX. Valuation options are Yahoo Finance (default), Finnhub BYOK, and FMP BYOK. Explicit valuation choices never switch silently; Room caches snapshots by symbol and source | [`data-sources.md`](data-sources.md) |
+| B | Data approach | **User-controlled direct Android providers**: quote, chart, and valuation providers are configured independently in DataStore. Quote options are Auto (Tencent then Sina), Tencent-only, and Sina-only. Chart options are Eastmoney Experimental (default, no account), Not configured, or Alpaca Basic Live IEX. Valuation options are Yahoo Finance (default), Finnhub BYOK, and FMP BYOK. Explicit chart and valuation choices never switch silently; Room caches facts by actual source | [`data-sources.md`](data-sources.md) |
 | B2 | Canonical symbol and time model | Use provider-specific symbol mapping at the edges; keep exchange-time-correct timestamps internally for DST, holidays, and bar boundaries; convert every displayed timestamp to the device local timezone | [`data-sources.md`](data-sources.md) |
 | B3 | Project-server boundary | No project server exists for the MVP or current architecture; runtime networking and processing stay local to Android | §2 |
-| B4 | Alpaca account connection | Keep direct BYOK onboarding: link to Alpaca's official signup and API-key dashboard, then let the user paste credentials for local encryption. Do not implement Alpaca Connect OAuth while its documented code exchange requires a client secret on a backend and provides no documented native PKCE flow | [`data-sources.md` §2.3](data-sources.md#23-alpaca-basic-live-iex-chart-contract) |
+| B4 | Alpaca account connection | Keep direct BYOK onboarding: link to Alpaca's official signup and API-key dashboard, then let the user paste credentials for local encryption. Do not implement Alpaca Connect OAuth while its documented code exchange requires a client secret on a backend and provides no documented native PKCE flow | [`data-sources.md` §2.4](data-sources.md#24-alpaca-basic-live-iex-chart-contract) |
+| B5 | Eastmoney chart contract | Default to the no-account experimental client, resolve `secid` through exact US-code search rather than exchange hardcoding, use only unadjusted `fqt=0` K-lines, aggregate only contiguous complete 4-hour buckets locally, exclude Eastmoney bars from split-sensitive analysis, and disclose unofficial status, retention, stability, quota, and licensing caveats | [`data-sources.md` §2.3](data-sources.md#23-eastmoney-experimental-us-chart-contract) |
 | Q1 | AI architecture | Streamlined **3 plus 1**: fundamentals, technicals, risk, arbiter | [`analysis.md` §3.1](analysis.md#31-streamlined-3-plus-1-flow) |
 | Q2 | AI integration | BYOK Azure OpenAI four-part configuration; prompts and outputs follow a shared contract; requests go directly from Android to Azure | [`ai-prompt.md`](ai-prompt.md) |
 | S1 | Screening scope | The MVP includes both watchlist monitoring and full screening across NASDAQ, NYSE, and NYSE American | [`analysis.md` §2.2](analysis.md#22-two-stock-selection-entry-points-as-product-behavior) |
-| S5 | Screening universe | NASDAQ, NYSE, and NYSE American operating-company securities. Include common stocks and ADRs only when required valuation fields are complete; exclude ETFs, funds, warrants, rights, units, and preferred shares | [`data-sources.md` §2.5](data-sources.md#25-us-exchange-screening-universe) |
+| S5 | Screening universe | NASDAQ, NYSE, and NYSE American operating-company securities. Include common stocks and ADRs only when required valuation fields are complete; exclude ETFs, funds, warrants, rights, units, and preferred shares | [`data-sources.md` §2.6](data-sources.md#26-us-exchange-screening-universe) |
 | M1 | ML in the MVP | **Yes, LightGBM**, but only as an auxiliary probability signal | [`analysis.md` §4](analysis.md#4-ml-support-signals-lightgbm-direction-models) |
 | M2 | Intraday prediction | Infer the probability of direction over the **next 30 minutes** after every completed local 5-minute bar; the model is trained offline and shipped for on-device inference | [`analysis.md` §4.3](analysis.md#43-live-inference-and-visualization-contract) |
 | M3 | Medium-horizon prediction | Infer the probability of direction over the **next 5 trading days** after each market close | [`analysis.md` §4.3](analysis.md#43-live-inference-and-visualization-contract) |
@@ -147,6 +155,7 @@ Boundaries:
 | U6 | Screening MVP behavior | Screening is a full, visible MVP tab with working NASDAQ, NYSE, and NYSE American refresh, progress, and results; it is not hidden or deferred | [`design.md` §4.3](design.md#43-screening-page) |
 | U7 | Language behavior | English and Simplified Chinese are supported; follow the Android system by default and allow a persisted per-app override in Me | [`design.md` §4.5](design.md#45-me-settings-page) |
 | U8 | Updates and feedback | Check the repository's latest GitHub Release automatically and manually; link only to validated project APK assets, GitHub Issues, and the documented maintainer email | [`design.md` §4.5](design.md#45-me-settings-page) |
+| U9 | Watchlist chart priority | Keep stock-code controls at the top of Watchlist after selection; render refresh state and the expanded market chart immediately below, before quote, valuation, support/resistance, and technical cards. Selection expands the same page rather than opening a separate navigation destination | [`design.md` §4.1](design.md#41-watchlist-page-home-page-and-daily-cockpit) |
 | V1 | Market chart | TradingView-inspired reference for interaction density and information hierarchy; never copy proprietary code, assets, or branding | [`design.md` §6](design.md#6-chart-design-and-visualization-checklist) |
 | V2 | Chart implementation | Vico Compose base layers plus Compose overlay and custom drawing; do not integrate the proprietary TradingView Charting Library | [`design.md` §6.1](design.md#61-kotlin-compose-chart-technology-choice) |
 | V3 | Exact chart timeframes and layers | Support minute/hour/day/month families with `1m / 5m / 15m / 30m / 1h / 4h / 1D / 1M`; show candlesticks, volume histogram, and a labeled LightGBM probability line; do not promise weekly in the MVP | [`design.md` §6](design.md#6-chart-design-and-visualization-checklist) |
@@ -170,7 +179,7 @@ Boundaries:
 | Q3 | Scheduled watchlist analysis | Integrate in phase two | This document |
 | Q4 | Cost-saving mode | Keep a single-agent toggle | [`design.md` §4.4](design.md#44-ai-interpretation-page-multi-agent) |
 | U3 | Behavioral reminders | On by default, user can disable | [`design.md` §8](design.md#8-behavioral-counterweights) |
-| U4 | Detail-page folding | Valuation, support/resistance, and market chart expanded by default | [`design.md` §4.2](design.md#42-stock-detail-page-secondary-level-highest-information-density) |
+| U4 | Watchlist research-card folding | Market chart, valuation, and support/resistance are expanded by default after a symbol is selected | [`design.md` §4.2](design.md#42-stock-detail-page-secondary-level-highest-information-density) |
 | U5 | AI presentation | Stream each agent, then show the final arbiter card | [`design.md` §4.4](design.md#44-ai-interpretation-page-multi-agent) |
 
 ## 4. Key data and timing
@@ -178,8 +187,8 @@ Boundaries:
 | Data | Source | Freshness | App expression |
 |---|---|---|---|
 | Current price and live quote snapshot | User-selected Auto, Tencent, or Sina mode | 30-60 second polling | Show quote timestamp and actual source |
-| 1-minute bars and local completed 5-minute bars | Optional Alpaca Basic Live IEX; never describe as consolidated SIP | Every completed bar | Drive charts, indicators, screening signals, and `30m` inference |
-| 15-minute, 30-minute, 1-hour, 4-hour, daily, and monthly candles | Optional Alpaca Basic Live IEX; canonical Room storage | Refresh after provider publication | Multi-timeframe chart history with feed disclosure |
+| 1-minute and 5-minute bars | Eastmoney Experimental native bars by default; Alpaca uses IEX 1-minute bars plus local completed 5-minute aggregation | Every completed available bar within provider capability | Drive charts and future `30m` inference without fabricating gaps |
+| 15-minute, 30-minute, 1-hour, 4-hour, daily, and monthly candles | Selected Eastmoney Experimental or Alpaca Live IEX source; Eastmoney 4-hour bars are local aggregates of completed hourly bars | Refresh after provider publication | Source-isolated multi-timeframe history with dynamic disclosure |
 | Analyst targets, valuation, rating, coverage, averages, and 52-week fields | User-selected Yahoo Finance, Finnhub BYOK, or FMP BYOK; provider-specific fields remain nullable | Daily cache cadence | Show actual source; never mix caches across providers; FMP omits forward P/E and target-aligned analyst count |
 | Screening refresh state | WorkManager plus Room | Background batched refreshes | Show progress, resumable status, and cache freshness |
 | 30-minute direction probability | ONNX Runtime Android intraday model | After each completed local 5-minute bar | Show horizon, probability, model version, and freshness |
@@ -207,29 +216,31 @@ metrics. For the full contract, see
 | [`design-system/ai-stock-analyst/MASTER.md`](design-system/ai-stock-analyst/MASTER.md) | Exact visual tokens, accessibility, and chart semantics | Maintained |
 | [`ai-prompt.md`](ai-prompt.md) | 3+1 agent prompts and structured output contract | Maintained |
 | [`releasing.md`](releasing.md) | APK signing, shared patch versioning, and GitHub Release automation | Maintained |
-| [`../app/`](../app/) | Android application, four-tab Compose shell, Hilt graph, stock lookup/detail state, and Vico market chart | Implemented foundation plus first detail/chart slice |
+| [`../app/`](../app/) | Android application, four-tab Compose shell, Hilt graph, Watchlist lookup/research state, and Vico market chart | Implemented foundation plus first Watchlist chart slice |
 | [`../core/data/`](../core/data/) | Local-first repository and stale-cache refresh behavior | Implemented quote, valuation, and bar-history slices |
 | [`../core/database/`](../core/database/) | Room cache, DAOs, schema, and model mappings | Implemented quote, valuation, and bar-history slices |
 | [`../core/datastore/`](../core/datastore/) | Provider preferences and Android-Keystore-backed Alpaca, Finnhub, and FMP credentials | Implemented |
 | [`../core/model/`](../core/model/) | Canonical market-domain models | Implemented foundation |
-| [`../core/domain/`](../core/domain/) | Deterministic valuation, time, completed five-minute aggregation, MA50/200, Wilder RSI(14), 52-week positioning, and support/resistance | Implemented foundation |
+| [`../core/domain/`](../core/domain/) | Deterministic valuation, time, completed five-minute/four-hour aggregation, MA50/200, Wilder RSI(14), 52-week positioning, and support/resistance | Implemented foundation |
 | [`../core/designsystem/`](../core/designsystem/) | Compose design tokens and theme | Implemented foundation |
-| [`../core/network/`](../core/network/) | Direct quote, Alpaca IEX chart, and valuation clients | Implemented quote/valuation/chart ingestion slices |
+| [`../core/network/`](../core/network/) | Direct quote, Eastmoney Experimental, Alpaca IEX, and valuation clients | Implemented quote/valuation/chart ingestion slices |
 
 ## 6. Delivery order
 
 Steps 1 and 2 are implemented for quote and valuation snapshots. Step 3 now
-has the canonical `PriceBar` model, Room v2 schema, DAO, mappings, observable
-cache API, and opt-in Alpaca Basic ingestion with encrypted BYOK credentials.
-Completed local 5-minute aggregation and atomic source/derived persistence are
-implemented. MA50, MA200, and Wilder RSI(14) are calculated locally from the
+has the canonical `PriceBar` model, source-isolated Room schema, DAO, mappings,
+observable cache API, default no-account Eastmoney ingestion, and opt-in
+Alpaca Basic ingestion with encrypted BYOK credentials. Native Eastmoney
+5-minute routing, local Alpaca 5-minute aggregation, and local Eastmoney
+4-hour aggregation are implemented. MA50, MA200, and Wilder RSI(14) are calculated locally from the
 complete cached daily history and exposed as a freshness-aware repository
 snapshot. The same history plus the current quote now produces 52-week
 positioning and four-method support/resistance with resonance and nearest-level
-distances. The first stock-detail presentation slice now combines these
-snapshots with quote, valuation, and multi-timeframe Room history. Its Vico
-chart uses neutral candlesticks, a separately scaled IEX-volume layer,
-device-local labels, pan/zoom, and reset-to-latest behavior. Probability
+distances. The Watchlist research slice keeps symbol entry at the top and
+places its chart before quote, valuation, support/resistance, and technical
+cards. Its Vico chart uses neutral candlesticks, a separately scaled volume
+layer, device-local labels, pan/zoom, reset-to-latest behavior, and dynamic
+Eastmoney/Alpaca disclosure. Probability
 overlays, crosshair synchronization, landscape mode, and persisted watchlists
 remain.
 
@@ -238,7 +249,7 @@ remain.
 2. Bring up Tencent and Sina quote clients, Yahoo/Finnhub/FMP valuation
    clients, Room caches, and the canonical exchange-time model.
 3. Implement deterministic indicators, support/resistance, and the
-   TradingView-inspired detail-page chart with
+   TradingView-inspired Watchlist research chart with
    `1m / 5m / 15m / 30m / 1h / 4h / 1D / 1M`
    shortcuts, candlesticks, volume, and probability-line placement.
 4. Implement the full three-exchange screening pipeline with WorkManager

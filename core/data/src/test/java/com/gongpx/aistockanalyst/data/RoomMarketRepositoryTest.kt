@@ -365,7 +365,7 @@ class RoomMarketRepositoryTest {
             ).map { it.toModel() },
         )
         assertEquals(
-            emptyList<PriceBarEntity>(),
+            listOf(expected.copy(source = DataSource.TENCENT)),
             priceBarDao.getRange(
                 symbol = symbol.value,
                 exchange = Exchange.NASDAQ.name,
@@ -373,7 +373,7 @@ class RoomMarketRepositoryTest {
                 source = DataSource.TENCENT.name,
                 startEpochMillis = expected.start.toEpochMilli(),
                 endExclusiveEpochMillis = expected.endExclusive.toEpochMilli(),
-            ),
+            ).map { it.toModel() },
         )
         assertEquals(
             listOf(200.0),
@@ -386,6 +386,114 @@ class RoomMarketRepositoryTest {
                 endExclusiveEpochMillis = Instant.parse("2026-07-14T15:05:00Z")
                     .toEpochMilli(),
             ).map(PriceBarEntity::close),
+        )
+    }
+
+    @Test
+    fun `Eastmoney five-minute refresh preserves native bars without one-minute coupling`() =
+        runBlocking {
+            val symbol = StockSymbol.of("AAPL")
+            val requestedIntervals = mutableListOf<BarInterval>()
+            val nativeFiveMinute = priceBar(symbol).copy(
+                interval = BarInterval.FIVE_MINUTES,
+                endExclusive = Instant.parse("2026-07-14T15:05:00Z"),
+                source = DataSource.EASTMONEY_EXPERIMENTAL,
+            )
+            val settings = FixedSettingsStore(ChartProvider.EASTMONEY_EXPERIMENTAL)
+            val priceBarDao = FakePriceBarDao()
+            val repository = RoomMarketRepository(
+                quoteClient = UnusedQuoteClient,
+                chartClient = object : ChartClient {
+                    override suspend fun fetchBars(
+                        symbol: StockSymbol,
+                        exchange: Exchange,
+                        interval: BarInterval,
+                        start: Instant,
+                        endExclusive: Instant,
+                    ): List<PriceBar> {
+                        requestedIntervals += interval
+                        return listOf(nativeFiveMinute)
+                    }
+                },
+                valuationClient = UnusedValuationClient,
+                settingsStore = settings,
+                quoteDao = FakeQuoteDao(),
+                valuationDao = FakeValuationDao(),
+                priceBarDao = priceBarDao,
+                clock = Clock.fixed(
+                    Instant.parse("2026-07-14T15:05:00Z"),
+                    ZoneOffset.UTC,
+                ),
+            )
+
+            val result = repository.refreshBars(
+                symbol = symbol,
+                exchange = Exchange.NASDAQ,
+                interval = BarInterval.FIVE_MINUTES,
+                start = nativeFiveMinute.start,
+                endExclusive = nativeFiveMinute.endExclusive,
+            )
+
+            assertEquals(listOf(BarInterval.FIVE_MINUTES), requestedIntervals)
+            assertEquals(listOf(nativeFiveMinute), result.value)
+            assertTrue(
+                priceBarDao.getRange(
+                    symbol = symbol.value,
+                    exchange = Exchange.NASDAQ.name,
+                    interval = BarInterval.ONE_MINUTE.name,
+                    source = DataSource.EASTMONEY_EXPERIMENTAL.name,
+                    startEpochMillis = nativeFiveMinute.start.toEpochMilli(),
+                    endExclusiveEpochMillis = nativeFiveMinute.endExclusive.toEpochMilli(),
+                ).isEmpty(),
+            )
+        }
+
+    @Test
+    fun `bar observation is isolated by selected chart source`() = runBlocking {
+        val symbol = StockSymbol.of("AAPL")
+        val alpaca = priceBar(symbol)
+        val eastmoney = alpaca.copy(
+            close = 201.0,
+            source = DataSource.EASTMONEY_EXPERIMENTAL,
+        )
+        val priceBarDao = FakePriceBarDao().apply {
+            upsertAll(listOf(alpaca.toEntity(), eastmoney.toEntity()))
+        }
+        val settings = FixedSettingsStore(ChartProvider.EASTMONEY_EXPERIMENTAL)
+        val repository = RoomMarketRepository(
+            quoteClient = UnusedQuoteClient,
+            chartClient = UnusedChartClient,
+            valuationClient = UnusedValuationClient,
+            settingsStore = settings,
+            quoteDao = FakeQuoteDao(),
+            valuationDao = FakeValuationDao(),
+            priceBarDao = priceBarDao,
+            clock = Clock.fixed(
+                Instant.parse("2026-07-14T15:05:00Z"),
+                ZoneOffset.UTC,
+            ),
+        )
+
+        assertEquals(
+            listOf(eastmoney),
+            repository.observeBars(
+                symbol,
+                Exchange.NASDAQ,
+                BarInterval.ONE_MINUTE,
+                10,
+            ).first(),
+        )
+
+        settings.setChartProvider(ChartProvider.ALPACA_IEX)
+
+        assertEquals(
+            listOf(alpaca),
+            repository.observeBars(
+                symbol,
+                Exchange.NASDAQ,
+                BarInterval.ONE_MINUTE,
+                10,
+            ).first(),
         )
     }
 
@@ -734,6 +842,50 @@ class RoomMarketRepositoryTest {
             assertTrue(snapshot.levels.isNotEmpty())
         }
 
+    @Test
+    fun `repository excludes unadjusted Eastmoney bars from split-sensitive analysis`() =
+        runBlocking {
+            val symbol = StockSymbol.of("AAPL")
+            val daily = PriceBar(
+                symbol = symbol,
+                exchange = Exchange.NASDAQ,
+                interval = BarInterval.ONE_DAY,
+                start = Instant.parse("2026-07-13T04:00:00Z"),
+                endExclusive = Instant.parse("2026-07-14T04:00:00Z"),
+                open = 195.0,
+                high = 210.0,
+                low = 190.0,
+                close = 200.0,
+                volume = 1_000,
+                fetchedAt = Instant.parse("2026-07-14T15:00:05Z"),
+                source = DataSource.EASTMONEY_EXPERIMENTAL,
+            )
+            val repository = RoomMarketRepository(
+                quoteClient = UnusedQuoteClient,
+                chartClient = UnusedChartClient,
+                valuationClient = UnusedValuationClient,
+                settingsStore = FixedSettingsStore(ChartProvider.EASTMONEY_EXPERIMENTAL),
+                quoteDao = FakeQuoteDao(quote(symbol).toEntity()),
+                valuationDao = FakeValuationDao(),
+                priceBarDao = FakePriceBarDao().apply {
+                    upsertAll(listOf(daily.toEntity()))
+                },
+                clock = Clock.fixed(
+                    Instant.parse("2026-07-15T20:00:00Z"),
+                    ZoneOffset.UTC,
+                ),
+            )
+
+            assertEquals(
+                null,
+                repository.observeTechnicalIndicators(symbol, Exchange.NASDAQ).first(),
+            )
+            assertEquals(
+                null,
+                repository.observePriceLevels(symbol, Exchange.NASDAQ).first(),
+            )
+        }
+
     private fun quote(symbol: StockSymbol): QuoteSnapshot = QuoteSnapshot(
         symbol = symbol,
         exchange = Exchange.NASDAQ,
@@ -922,6 +1074,7 @@ private class FakePriceBarDao : PriceBarDao {
         symbol: String,
         exchange: String,
         interval: String,
+        source: String,
         startEpochMillis: Long,
         endExclusiveEpochMillis: Long,
     ) {
@@ -929,6 +1082,7 @@ private class FakePriceBarDao : PriceBarDao {
             it.symbol == symbol &&
                 it.exchange == exchange &&
                 it.interval == interval &&
+                it.source == source &&
                 it.startEpochMillis >= startEpochMillis &&
                 it.endExclusiveEpochMillis <= endExclusiveEpochMillis
         }
@@ -937,7 +1091,7 @@ private class FakePriceBarDao : PriceBarDao {
     override suspend fun upsertAll(entities: List<PriceBarEntity>) {
         state.value = (state.value + entities)
             .associateBy {
-                listOf(it.symbol, it.exchange, it.interval, it.startEpochMillis)
+                listOf(it.symbol, it.exchange, it.interval, it.startEpochMillis, it.source)
             }
             .values
             .toList()
@@ -981,4 +1135,29 @@ private object AlpacaSettingsStore : MarketDataSourceSettingsStore {
         error("Not used by this test")
 
     override suspend fun resetToDefaults() = error("Not used by this test")
+}
+
+private class FixedSettingsStore(
+    chartProvider: ChartProvider,
+) : MarketDataSourceSettingsStore {
+    private val state = MutableStateFlow(
+        MarketDataSourceSettings(chartProvider = chartProvider),
+    )
+    override val settings: Flow<MarketDataSourceSettings> = state
+
+    override suspend fun setQuoteProvider(provider: QuoteProvider) {
+        state.value = state.value.copy(quoteProvider = provider)
+    }
+
+    override suspend fun setChartProvider(provider: ChartProvider) {
+        state.value = state.value.copy(chartProvider = provider)
+    }
+
+    override suspend fun setValuationProvider(provider: ValuationProvider) {
+        state.value = state.value.copy(valuationProvider = provider)
+    }
+
+    override suspend fun resetToDefaults() {
+        state.value = MarketDataSourceSettings()
+    }
 }

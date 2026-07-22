@@ -13,6 +13,7 @@ import java.time.Instant
 class UserSelectedChartClient(
     private val settingsStore: MarketDataSourceSettingsStore,
     private val alpacaClient: ChartClient,
+    private val eastmoneyClient: ChartClient,
 ) : ChartClient {
     override suspend fun fetchBars(
         symbol: StockSymbol,
@@ -23,6 +24,13 @@ class UserSelectedChartClient(
     ): List<PriceBar> = when (settingsStore.current().chartProvider) {
         ChartProvider.NOT_CONFIGURED -> throw ChartProviderNotConfiguredException()
         ChartProvider.ALPACA_IEX -> alpacaClient.fetchBars(
+            symbol = symbol,
+            exchange = exchange,
+            interval = interval,
+            start = start,
+            endExclusive = endExclusive,
+        )
+        ChartProvider.EASTMONEY_EXPERIMENTAL -> eastmoneyClient.fetchBars(
             symbol = symbol,
             exchange = exchange,
             interval = interval,

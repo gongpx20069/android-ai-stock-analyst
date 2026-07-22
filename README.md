@@ -43,21 +43,23 @@ Kotlin/Compose project, four-tab application shell, shared design system,
 market-domain models, user-selectable Tencent/Sina quote routing, an isolated
 Yahoo Finance cookie/crumb valuation client, Room-backed quote and valuation
 caches, DataStore provider settings, and a Hilt-wired repository with explicit
-stale-cache results. Alpaca Basic is available as an opt-in chart provider
-using encrypted user credentials and explicit Live IEX, non-consolidated feed
-disclosure. Its paginated split-adjusted bars now flow into the canonical
-`PriceBar` model and Room v2 cache. Completed 5-minute bars are now derived
-locally from exchange-time-aligned 1-minute IEX bars and persisted atomically
-with their source range. The local domain layer now calculates MA50, MA200, and
+stale-cache results. Eastmoney Experimental is the default no-account chart
+provider, with exact US-symbol resolution, unadjusted K-lines, short-retention
+capability errors, and explicit unofficial-interface and licensing disclosure.
+Alpaca Basic remains an opt-in encrypted-BYOK alternative with explicit Live
+IEX, non-consolidated disclosure. Source-isolated bars flow into the canonical
+`PriceBar` model and Room cache. Alpaca 5-minute bars are derived locally from
+1-minute IEX history; Eastmoney keeps native 5-minute bars and locally
+aggregates completed 4-hour session buckets. The local domain layer now calculates MA50, MA200, and
 Wilder RSI(14) from completed valid daily bars and exposes a freshness-aware
 snapshot through the repository. The same normalized history now drives
 52-week positioning plus pivot, swing, Fibonacci, moving-average, and
 52-week support/resistance levels with cross-method resonance. The Watchlist
-tab now provides stock lookup and a first stock-detail slice that combines
-quote, valuation, support/resistance, technicals, and cached multi-timeframe
-bars. Its Vico chart renders neutral candlesticks and an independently scaled
-IEX volume histogram with device-local timestamps, pan/zoom, and reset-to-latest
-behavior. Watchlist persistence, screening, chart probability overlays, and
+tab keeps stock lookup controls visible after selection and places its chart
+first, before quote, valuation, support/resistance, and technical cards. Its
+Vico chart renders neutral candlesticks and an independently scaled volume
+histogram with device-local timestamps, pan/zoom, reset-to-latest behavior, and
+dynamic Eastmoney/Alpaca disclosure. Watchlist persistence, screening, chart probability overlays, and
 ONNX inference remain to be implemented. The app UI now supports English and
 Simplified Chinese, follows the system by default, and exposes GitHub Release
 update checks plus Issue and email feedback links in Me.

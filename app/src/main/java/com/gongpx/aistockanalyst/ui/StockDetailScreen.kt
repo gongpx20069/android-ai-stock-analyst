@@ -37,6 +37,7 @@ import com.gongpx.aistockanalyst.R
 import com.gongpx.aistockanalyst.designsystem.theme.AppColors
 import com.gongpx.aistockanalyst.designsystem.theme.AppSpacing
 import com.gongpx.aistockanalyst.model.BarInterval
+import com.gongpx.aistockanalyst.model.ChartProvider
 import com.gongpx.aistockanalyst.model.DataSource
 import com.gongpx.aistockanalyst.model.Exchange
 import com.gongpx.aistockanalyst.model.PriceBar
@@ -59,35 +60,16 @@ internal fun WatchlistDestination(
     onRefresh: () -> Unit,
     onIntervalSelected: (BarInterval) -> Unit,
 ) {
-    if (state.selection == null) {
-        StockEntryScreen(
-            contentPadding = contentPadding,
-            message = state.message,
-            invalidSymbol = state.invalidSymbol,
-            onOpenStock = onOpenStock,
-        )
-    } else {
-        StockDetailScreen(
-            contentPadding = contentPadding,
-            state = state,
-            onCloseStock = onCloseStock,
-            onRefresh = onRefresh,
-            onIntervalSelected = onIntervalSelected,
-        )
-    }
-}
-
-@Composable
-private fun StockEntryScreen(
-    contentPadding: PaddingValues,
-    message: String?,
-    invalidSymbol: Boolean,
-    onOpenStock: (String, Exchange) -> Unit,
-) {
     var symbol by rememberSaveable { mutableStateOf("") }
     var exchangeName by rememberSaveable { mutableStateOf(Exchange.NASDAQ.name) }
     val exchange = Exchange.valueOf(exchangeName)
     val submit = { onOpenStock(symbol, exchange) }
+    LaunchedEffect(state.selection) {
+        state.selection?.let { selection ->
+            symbol = selection.symbol.value
+            exchangeName = selection.exchange.name
+        }
+    }
 
     ScreenContainer(contentPadding) {
         ScreenTitle(stringResource(R.string.watchlist_title))
@@ -131,10 +113,10 @@ private fun StockEntryScreen(
                     )
                 }
             }
-            val displayedMessage = if (invalidSymbol) {
+            val displayedMessage = if (state.invalidSymbol) {
                 stringResource(R.string.invalid_stock_symbol)
             } else {
-                message
+                null
             }
             displayedMessage?.let {
                 Spacer(Modifier.height(AppSpacing.small))
@@ -144,72 +126,59 @@ private fun StockEntryScreen(
             Button(
                 onClick = submit,
                 enabled = symbol.isNotBlank(),
+                modifier = Modifier.fillMaxWidth(),
             ) {
                 Text(stringResource(R.string.open_stock_detail))
             }
+            if (state.selection != null) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(AppSpacing.small),
+                ) {
+                    TextButton(onClick = onCloseStock) {
+                        Text(stringResource(R.string.change_stock))
+                    }
+                    Button(
+                        onClick = onRefresh,
+                        enabled = !state.isRefreshing,
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        Text(stringResource(R.string.refresh))
+                    }
+                }
+            }
         }
-        InformationCard {
-            Text(
-                text = stringResource(R.string.stock_data_requirements),
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-            )
-            Spacer(Modifier.height(AppSpacing.small))
-            Text(
-                text = stringResource(R.string.stock_data_requirements_body),
-                color = AppColors.onSurfaceMuted,
-            )
-        }
-    }
-}
-
-@Composable
-private fun StockDetailScreen(
-    contentPadding: PaddingValues,
-    state: StockDetailUiState,
-    onCloseStock: () -> Unit,
-    onRefresh: () -> Unit,
-    onIntervalSelected: (BarInterval) -> Unit,
-) {
-    val selection = requireNotNull(state.selection)
-    ScreenContainer(contentPadding) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(AppSpacing.small),
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                ScreenTitle(selection.symbol.value)
+        if (state.selection == null) {
+            InformationCard {
                 Text(
-                    text = selection.exchange.displayName(),
+                    text = stringResource(R.string.stock_data_requirements),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Spacer(Modifier.height(AppSpacing.small))
+                Text(
+                    text = stringResource(R.string.stock_data_requirements_body),
                     color = AppColors.onSurfaceMuted,
                 )
             }
-            TextButton(onClick = onCloseStock) {
-                Text(stringResource(R.string.change_stock))
+        } else {
+            if (state.isRefreshing) {
+                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
             }
-            Button(
-                onClick = onRefresh,
-                enabled = !state.isRefreshing,
-            ) {
-                Text(stringResource(R.string.refresh))
+            state.message?.let {
+                InformationCard {
+                    Text(text = it, color = MaterialTheme.colorScheme.error)
+                }
             }
+            MarketChartBlock(
+                state = state,
+                onIntervalSelected = onIntervalSelected,
+            )
+            QuoteCard(state)
+            ValuationBlock(state)
+            PriceLevelBlock(state)
+            TechnicalBlock(state)
         }
-        if (state.isRefreshing) {
-            LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-        }
-        state.message?.let {
-            InformationCard {
-                Text(text = it, color = MaterialTheme.colorScheme.error)
-            }
-        }
-        QuoteCard(state)
-        ValuationBlock(state)
-        PriceLevelBlock(state)
-        TechnicalBlock(state)
-        MarketChartBlock(
-            state = state,
-            onIntervalSelected = onIntervalSelected,
-        )
     }
 }
 
@@ -311,10 +280,15 @@ private fun ValuationBlock(state: StockDetailUiState) {
 @Composable
 private fun PriceLevelBlock(state: StockDetailUiState) {
     val snapshot = state.priceLevels
+    val unavailable = if (state.chartProvider == ChartProvider.EASTMONEY_EXPERIMENTAL) {
+        stringResource(R.string.eastmoney_price_levels_unavailable)
+    } else {
+        stringResource(R.string.price_levels_unavailable)
+    }
     ExpandableInformationCard(
         title = stringResource(R.string.support_resistance),
         summary = if (snapshot == null) {
-            stringResource(R.string.price_levels_unavailable)
+            unavailable
         } else {
             stringResource(
                 R.string.nearest_level_summary,
@@ -325,7 +299,7 @@ private fun PriceLevelBlock(state: StockDetailUiState) {
         initiallyExpanded = true,
     ) {
         if (snapshot == null) {
-            Text(stringResource(R.string.price_levels_unavailable))
+            Text(unavailable)
         } else {
             DataRow(
                 stringResource(R.string.nearest_support),
@@ -356,15 +330,20 @@ private fun PriceLevelBlock(state: StockDetailUiState) {
 private fun TechnicalBlock(state: StockDetailUiState) {
     val technicals = state.technicals
     val positioning = state.priceLevels
+    val unavailable = if (state.chartProvider == ChartProvider.EASTMONEY_EXPERIMENTAL) {
+        stringResource(R.string.eastmoney_technicals_unavailable)
+    } else {
+        stringResource(R.string.technicals_unavailable)
+    }
     ExpandableInformationCard(
         title = stringResource(R.string.technicals),
         summary = technicals?.rsi14?.let {
             stringResource(R.string.rsi_summary, it.asNumber())
-        } ?: stringResource(R.string.technicals_unavailable),
+        } ?: unavailable,
         initiallyExpanded = false,
     ) {
         if (technicals == null) {
-            Text(stringResource(R.string.technicals_unavailable))
+            Text(unavailable)
         } else {
             DataRow(stringResource(R.string.ma50), technicals.ma50.asPrice())
             DataRow(stringResource(R.string.ma200), technicals.ma200.asPrice())
@@ -409,7 +388,7 @@ private fun MarketChartBlock(
         }
         Spacer(Modifier.height(AppSpacing.small))
         Text(
-            text = stringResource(R.string.alpaca_iex_chart_disclosure),
+            text = chartDisclosure(state),
             color = AppColors.onSurfaceMuted,
         )
         Spacer(Modifier.height(AppSpacing.medium))
@@ -420,6 +399,22 @@ private fun MarketChartBlock(
             Spacer(Modifier.height(AppSpacing.small))
             CompletedBarsSummary(state.bars)
         }
+    }
+}
+
+@Composable
+private fun chartDisclosure(state: StockDetailUiState): String {
+    val barSource = state.bars.map(PriceBar::source).distinct().singleOrNull()
+    return when {
+        barSource == DataSource.EASTMONEY_EXPERIMENTAL ->
+            stringResource(R.string.eastmoney_chart_disclosure)
+        barSource == DataSource.ALPACA_IEX ->
+            stringResource(R.string.alpaca_iex_chart_disclosure)
+        state.chartProvider == ChartProvider.EASTMONEY_EXPERIMENTAL ->
+            stringResource(R.string.eastmoney_chart_disclosure)
+        state.chartProvider == ChartProvider.ALPACA_IEX ->
+            stringResource(R.string.alpaca_iex_chart_disclosure)
+        else -> stringResource(R.string.chart_provider_not_configured_disclosure)
     }
 }
 
@@ -518,6 +513,7 @@ private fun DataSource.displayName(): String = when (this) {
     DataSource.FINNHUB -> stringResource(R.string.source_finnhub)
     DataSource.FMP -> stringResource(R.string.source_fmp)
     DataSource.ALPACA_IEX -> stringResource(R.string.source_alpaca_iex)
+    DataSource.EASTMONEY_EXPERIMENTAL -> stringResource(R.string.source_eastmoney)
     DataSource.LOCAL_CALCULATION -> stringResource(R.string.source_local_calculation)
     DataSource.ONNX_RUNTIME -> stringResource(R.string.source_onnx_runtime)
 }

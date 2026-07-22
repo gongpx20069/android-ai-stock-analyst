@@ -13,9 +13,9 @@
     <string name="stock_lookup_body">Enter a US ticker and its primary exchange. Data remains on this device.</string>
     <string name="stock_symbol">US ticker</string>
     <string name="invalid_stock_symbol">Enter a valid US stock ticker.</string>
-    <string name="open_stock_detail">Open detail</string>
+    <string name="open_stock_detail">Load stock</string>
     <string name="stock_data_requirements">Before refreshing charts</string>
-    <string name="stock_data_requirements_body">A candlestick chart cannot be built from the current price alone; it needs historical open, high, low, close, and volume records. Vico only renders data already supplied to the app. Tencent and Sina currently provide reliable quote snapshots here, but not a reliable multi-timeframe US historical-bar contract. Because this local-only app has no project server or bundled market-data feed, select the optional Alpaca Live IEX source and save your own credentials in Me to load chart history.</string>
+    <string name="stock_data_requirements_body">Candlesticks need historical open, high, low, close, and volume records. Eastmoney Experimental is the default no-account chart source; Alpaca Live IEX remains an optional BYOK source. Both are used directly from this local-only app, never mixed or silently substituted.</string>
     <string name="change_stock">Change</string>
     <string name="refresh">Refresh</string>
     <string name="latest_quote">Latest quote</string>
@@ -35,6 +35,7 @@
     <string name="rating">Rating</string>
     <string name="support_resistance">Support and resistance</string>
     <string name="price_levels_unavailable">Price levels require a quote and completed daily history.</string>
+    <string name="eastmoney_price_levels_unavailable">Unavailable for Eastmoney because its unadjusted history is not safe for split-sensitive price levels.</string>
     <string name="nearest_level_summary">Support %1$s / resistance %2$s</string>
     <string name="nearest_support">Nearest support</string>
     <string name="nearest_resistance">Nearest resistance</string>
@@ -42,6 +43,7 @@
     <string name="technicals">Technicals</string>
     <string name="rsi_summary">RSI(14): %1$s</string>
     <string name="technicals_unavailable">Technicals require completed daily history.</string>
+    <string name="eastmoney_technicals_unavailable">Unavailable for Eastmoney because its unadjusted history is not safe for split-sensitive indicators.</string>
     <string name="ma50">MA50</string>
     <string name="ma200">MA200</string>
     <string name="rsi14">RSI(14)</string>
@@ -50,6 +52,8 @@
     <string name="market_chart">Market chart</string>
     <string name="completed_bar_count">%1$d completed %2$s bars</string>
     <string name="alpaca_iex_chart_disclosure">Live IEX data is from one exchange and is not consolidated US-market data.</string>
+    <string name="eastmoney_chart_disclosure">Eastmoney Experimental uses an unofficial no-account interface and unadjusted bars. Intraday retention is short and quota/stability are unknown; split-sensitive analysis, fallback, and source mixing are disabled.</string>
+    <string name="chart_provider_not_configured_disclosure">Historical chart data is not configured.</string>
     <string name="no_completed_bars">No completed bars are cached for this timeframe.</string>
     <string name="chart_reset">Reset</string>
     <string name="bar_time">Bar time</string>
@@ -81,7 +85,7 @@
     <string name="settings_data_sources_body">Choose quote, chart-data, and valuation providers independently. Vico renders charts inside the app; the chart-data provider supplies historical OHLCV. Each choice is stored only on this device.</string>
     <string name="settings_quote_provider">Live quotes</string>
     <string name="settings_chart_provider">Historical chart data</string>
-    <string name="settings_chart_provider_explanation">Why is an external source needed? Candlesticks require a history of open, high, low, close, and volume values; a current quote is not enough. Vico only draws those records locally and does not provide market data. Tencent and Sina are used here for quote snapshots, but their US historical-bar interfaces were not reliable enough to activate. This serverless app therefore needs a separate data source for chart history. Alpaca Live IEX is the current optional BYOK source; leaving it unconfigured disables historical charts.</string>
+    <string name="settings_chart_provider_explanation">Candlesticks require historical OHLCV, while Vico only renders supplied data. Eastmoney Experimental is the default no-account source; Alpaca Live IEX is optional BYOK. Explicit selections never silently fall back or mix cached bars.</string>
     <string name="settings_valuation_provider">Valuation and analyst data</string>
     <string name="provider_auto">Auto fallback</string>
     <string name="provider_tencent">Tencent</string>
@@ -91,6 +95,8 @@
     <string name="provider_fmp">Financial Modeling Prep (FMP)</string>
     <string name="provider_not_configured">Not configured</string>
     <string name="provider_alpaca_iex">Alpaca (Live IEX)</string>
+    <string name="provider_eastmoney_experimental">Eastmoney (Experimental, no account)</string>
+    <string name="settings_eastmoney_disclosure">Source: Eastmoney. This experimental client uses an unofficial no-account interface derived from contracts documented by the MIT-licensed efinance and AKShare projects. Those code licenses do not open-license Eastmoney data. Bars are unadjusted, so split-sensitive technical and price-level analysis is disabled. Intraday retention is short, quotas and stability are unknown, and failures are surfaced without fallback or mixing with Alpaca.</string>
     <string name="settings_alpaca_setup_title">Connect your Alpaca market-data account</string>
     <string name="settings_alpaca_setup_body">1. Create a free Alpaca account. 2. Open the Dashboard, find API Keys, and select Generate New Keys. 3. Copy the API Key ID and Secret Key back here; Alpaca displays the secret only when it is generated.</string>
     <string name="settings_alpaca_create_account">Create free account</string>
@@ -161,6 +167,7 @@
     <string name="source_finnhub">Finnhub</string>
     <string name="source_fmp">Financial Modeling Prep</string>
     <string name="source_alpaca_iex">Alpaca IEX</string>
+    <string name="source_eastmoney">Eastmoney Experimental</string>
     <string name="source_local_calculation">Local calculation</string>
     <string name="source_onnx_runtime">ONNX Runtime</string>
     <string name="level_pivot_point">Pivot point</string>

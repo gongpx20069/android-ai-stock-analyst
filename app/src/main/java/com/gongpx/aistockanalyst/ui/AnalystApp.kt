@@ -311,6 +311,8 @@ private fun SettingsScreen(
                             stringResource(R.string.provider_not_configured)
                         ChartProvider.ALPACA_IEX ->
                             stringResource(R.string.provider_alpaca_iex)
+                        ChartProvider.EASTMONEY_EXPERIMENTAL ->
+                            stringResource(R.string.provider_eastmoney_experimental)
                     }
                 },
                 onSelected = onChartProviderSelected,
@@ -328,6 +330,16 @@ private fun SettingsScreen(
                     inputMissing = settingsState.credentialsInputMissing,
                     onSave = onSaveAlpacaCredentials,
                     onClear = onClearAlpacaCredentials,
+                )
+            }
+            if (
+                settingsState.dataSources.chartProvider ==
+                ChartProvider.EASTMONEY_EXPERIMENTAL
+            ) {
+                Spacer(Modifier.height(AppSpacing.medium))
+                Text(
+                    text = stringResource(R.string.settings_eastmoney_disclosure),
+                    color = AppColors.onSurfaceMuted,
                 )
             }
             Spacer(Modifier.height(AppSpacing.medium))

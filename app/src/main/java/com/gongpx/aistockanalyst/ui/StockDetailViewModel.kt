@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.gongpx.aistockanalyst.data.MarketRepository
 import com.gongpx.aistockanalyst.data.RefreshResult
 import com.gongpx.aistockanalyst.model.BarInterval
+import com.gongpx.aistockanalyst.model.ChartProvider
 import com.gongpx.aistockanalyst.model.Exchange
 import com.gongpx.aistockanalyst.model.PriceBar
 import com.gongpx.aistockanalyst.model.PriceLevelSnapshot
@@ -15,7 +16,6 @@ import com.gongpx.aistockanalyst.model.ValuationSnapshot
 import dagger.hilt.android.lifecycle.HiltViewModel
 import java.io.IOException
 import java.time.Clock
-import java.time.Duration
 import java.time.Instant
 import javax.inject.Inject
 import kotlinx.coroutines.Job
@@ -36,6 +36,7 @@ data class StockSelection(
 
 data class StockDetailUiState(
     val selection: StockSelection? = null,
+    val chartProvider: ChartProvider = ChartProvider.EASTMONEY_EXPERIMENTAL,
     val interval: BarInterval = BarInterval.ONE_DAY,
     val quote: QuoteSnapshot? = null,
     val valuation: ValuationSnapshot? = null,
@@ -65,6 +66,14 @@ class StockDetailViewModel @Inject constructor(
     private var fullRefreshMessage: String? = null
     private var chartRefreshMessage: String? = null
 
+    init {
+        viewModelScope.launch {
+            repository.observeChartProvider().collect { provider ->
+                mutableUiState.update { it.copy(chartProvider = provider) }
+            }
+        }
+    }
+
     fun openStock(
         rawSymbol: String,
         exchange: Exchange,
@@ -84,6 +93,7 @@ class StockDetailViewModel @Inject constructor(
         cancelChartRefresh()
         mutableUiState.value = StockDetailUiState(
             selection = StockSelection(symbol, exchange),
+            chartProvider = mutableUiState.value.chartProvider,
         )
         observeSelection()
         refreshAll()
@@ -93,7 +103,9 @@ class StockDetailViewModel @Inject constructor(
         observationJob?.cancel()
         cancelFullRefresh()
         cancelChartRefresh()
-        mutableUiState.value = StockDetailUiState()
+        mutableUiState.value = StockDetailUiState(
+            chartProvider = mutableUiState.value.chartProvider,
+        )
     }
 
     fun selectInterval(interval: BarInterval) {
@@ -143,7 +155,9 @@ class StockDetailViewModel @Inject constructor(
                             symbol = selection.symbol,
                             exchange = selection.exchange,
                             interval = BarInterval.ONE_DAY,
-                            start = now.minus(DAILY_HISTORY),
+                            start = now.minus(
+                                repository.preferredChartHistory(BarInterval.ONE_DAY),
+                            ),
                             endExclusive = now,
                         )
                     }
@@ -238,7 +252,7 @@ class StockDetailViewModel @Inject constructor(
         symbol = selection.symbol,
         exchange = selection.exchange,
         interval = interval,
-        start = now.minus(interval.historyDuration()),
+        start = now.minus(repository.preferredChartHistory(interval)),
         endExclusive = now,
     )
 
@@ -305,22 +319,6 @@ class StockDetailViewModel @Inject constructor(
         val bars: List<PriceBar>,
     )
 
-    companion object {
-        private val DAILY_HISTORY: Duration = Duration.ofDays(400)
-    }
-}
-
-private fun BarInterval.historyDuration(): Duration = when (this) {
-    BarInterval.ONE_MINUTE -> Duration.ofDays(1)
-    BarInterval.FIVE_MINUTES -> Duration.ofDays(5)
-    BarInterval.FIFTEEN_MINUTES,
-    BarInterval.THIRTY_MINUTES,
-    -> Duration.ofDays(30)
-    BarInterval.ONE_HOUR,
-    BarInterval.FOUR_HOURS,
-    -> Duration.ofDays(180)
-    BarInterval.ONE_DAY -> Duration.ofDays(400)
-    BarInterval.ONE_MONTH -> Duration.ofDays(3_650)
 }
 
 private fun BarInterval.visibleBarLimit(): Int = when (this) {

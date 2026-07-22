@@ -24,13 +24,16 @@ import com.gongpx.aistockanalyst.model.ValuationSnapshot
 import com.gongpx.aistockanalyst.model.ValuationProvider
 import com.gongpx.aistockanalyst.network.QuoteClient
 import com.gongpx.aistockanalyst.network.ChartClient
+import com.gongpx.aistockanalyst.network.EastmoneyChartCapabilities
 import com.gongpx.aistockanalyst.network.ValuationClient
 import java.io.IOException
 import java.time.Clock
+import java.time.Duration
 import java.time.Instant
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.flatMapLatest
 
@@ -49,6 +52,8 @@ sealed interface RefreshResult<out T> {
 }
 
 interface MarketRepository {
+    fun observeChartProvider(): Flow<ChartProvider>
+
     fun observeQuote(
         symbol: StockSymbol,
         exchange: Exchange,
@@ -87,8 +92,11 @@ interface MarketRepository {
         start: Instant,
         endExclusive: Instant,
     ): RefreshResult<List<PriceBar>>
+
+    suspend fun preferredChartHistory(interval: BarInterval): Duration
 }
 
+@OptIn(ExperimentalCoroutinesApi::class)
 class RoomMarketRepository(
     private val quoteClient: QuoteClient,
     private val chartClient: ChartClient,
@@ -99,6 +107,9 @@ class RoomMarketRepository(
     private val priceBarDao: PriceBarDao,
     private val clock: Clock,
 ) : MarketRepository {
+    override fun observeChartProvider(): Flow<ChartProvider> =
+        settingsStore.settings.map { it.chartProvider }
+
     override fun observeQuote(
         symbol: StockSymbol,
         exchange: Exchange,
@@ -121,17 +132,18 @@ class RoomMarketRepository(
         limit: Int,
     ): Flow<List<PriceBar>> {
         require(limit > 0) { "Bar limit must be positive" }
-        val alpacaBars = priceBarDao.observeRecent(
-            symbol = symbol.value,
-            exchange = exchange.name,
-            interval = interval.name,
-            source = DataSource.ALPACA_IEX.name,
-            limit = limit,
-        )
-        return combine(settingsStore.settings, alpacaBars) { settings, entities ->
-            when (settings.chartProvider) {
-                ChartProvider.NOT_CONFIGURED -> emptyList()
-                ChartProvider.ALPACA_IEX -> entities.map { it.toModel() }
+        return settingsStore.settings.flatMapLatest { settings ->
+            when (val provider = settings.chartProvider) {
+                ChartProvider.NOT_CONFIGURED -> flowOf(emptyList())
+                ChartProvider.ALPACA_IEX,
+                ChartProvider.EASTMONEY_EXPERIMENTAL,
+                -> priceBarDao.observeRecent(
+                    symbol = symbol.value,
+                    exchange = exchange.name,
+                    interval = interval.name,
+                    source = provider.toDataSource().name,
+                    limit = limit,
+                ).map { entities -> entities.map { it.toModel() } }
             }
         }
     }
@@ -140,19 +152,22 @@ class RoomMarketRepository(
         symbol: StockSymbol,
         exchange: Exchange,
     ): Flow<TechnicalIndicatorSnapshot?> {
-        val dailyBars = priceBarDao.observeHistory(
-            symbol = symbol.value,
-            exchange = exchange.name,
-            interval = BarInterval.ONE_DAY.name,
-            source = DataSource.ALPACA_IEX.name,
-        )
-        return combine(settingsStore.settings, dailyBars) { settings, entities ->
-            when (settings.chartProvider) {
-                ChartProvider.NOT_CONFIGURED -> null
-                ChartProvider.ALPACA_IEX -> TechnicalIndicatorCalculator.calculateDaily(
-                    dailyBars = entities.map { it.toModel() },
-                    calculatedAt = clock.instant(),
-                )
+        return settingsStore.settings.flatMapLatest { settings ->
+            when (val provider = settings.chartProvider) {
+                ChartProvider.NOT_CONFIGURED,
+                ChartProvider.EASTMONEY_EXPERIMENTAL,
+                -> flowOf(null)
+                ChartProvider.ALPACA_IEX -> priceBarDao.observeHistory(
+                    symbol = symbol.value,
+                    exchange = exchange.name,
+                    interval = BarInterval.ONE_DAY.name,
+                    source = provider.toDataSource().name,
+                ).map { entities ->
+                    TechnicalIndicatorCalculator.calculateDaily(
+                        dailyBars = entities.map { it.toModel() },
+                        calculatedAt = clock.instant(),
+                    )
+                }
             }
         }
     }
@@ -161,26 +176,28 @@ class RoomMarketRepository(
         symbol: StockSymbol,
         exchange: Exchange,
     ): Flow<PriceLevelSnapshot?> {
-        val dailyBars = priceBarDao.observeHistory(
-            symbol = symbol.value,
-            exchange = exchange.name,
-            interval = BarInterval.ONE_DAY.name,
-            source = DataSource.ALPACA_IEX.name,
-        )
         val quote = quoteDao.observe(symbol.value, exchange.name)
-        return combine(
-            settingsStore.settings,
-            dailyBars,
-            quote,
-        ) { settings, entities, quoteEntity ->
-            when (settings.chartProvider) {
-                ChartProvider.NOT_CONFIGURED -> null
-                ChartProvider.ALPACA_IEX -> quoteEntity?.let {
-                    PriceLevelCalculator.calculateDaily(
-                        dailyBars = entities.map { entity -> entity.toModel() },
-                        quote = it.toModel(),
-                        calculatedAt = clock.instant(),
-                    )
+        return settingsStore.settings.flatMapLatest { settings ->
+            when (val provider = settings.chartProvider) {
+                ChartProvider.NOT_CONFIGURED,
+                ChartProvider.EASTMONEY_EXPERIMENTAL,
+                -> flowOf(null)
+                ChartProvider.ALPACA_IEX -> combine(
+                    priceBarDao.observeHistory(
+                        symbol = symbol.value,
+                        exchange = exchange.name,
+                        interval = BarInterval.ONE_DAY.name,
+                        source = provider.toDataSource().name,
+                    ),
+                    quote,
+                ) { entities, quoteEntity ->
+                    quoteEntity?.let {
+                        PriceLevelCalculator.calculateDaily(
+                            dailyBars = entities.map { entity -> entity.toModel() },
+                            quote = it.toModel(),
+                            calculatedAt = clock.instant(),
+                        )
+                    }
                 }
             }
         }
@@ -349,11 +366,15 @@ class RoomMarketRepository(
         endExclusive: Instant,
     ): RefreshResult<List<PriceBar>> {
         require(start < endExclusive) { "Bar range end must be after its start" }
-        val source = settingsStore.current().chartProvider.toDataSource()
+        val provider = settingsStore.current().chartProvider
+        val source = provider.toDataSource()
         return try {
             val bars = if (
-                interval == BarInterval.ONE_MINUTE ||
-                interval == BarInterval.FIVE_MINUTES
+                provider == ChartProvider.ALPACA_IEX &&
+                (
+                    interval == BarInterval.ONE_MINUTE ||
+                        interval == BarInterval.FIVE_MINUTES
+                    )
             ) {
                 refreshOneAndFiveMinuteBars(
                     symbol = symbol,
@@ -414,6 +435,7 @@ class RoomMarketRepository(
             symbol = symbol.value,
             exchange = exchange.name,
             interval = interval.name,
+            source = source.name,
             startEpochMillis = start.toEpochMilli(),
             endExclusiveEpochMillis = endExclusive.toEpochMilli(),
             entities = bars.map(PriceBar::toEntity),
@@ -449,6 +471,7 @@ class RoomMarketRepository(
         priceBarDao.replaceOneAndFiveMinuteRanges(
             symbol = symbol.value,
             exchange = exchange.name,
+            source = source.name,
             oneMinuteInterval = BarInterval.ONE_MINUTE.name,
             fiveMinuteInterval = BarInterval.FIVE_MINUTES.name,
             startEpochMillis = refreshRange.start.toEpochMilli(),
@@ -478,12 +501,35 @@ class RoomMarketRepository(
     private fun ChartProvider.toDataSource(): DataSource = when (this) {
         ChartProvider.NOT_CONFIGURED -> throw ChartProviderNotConfiguredException()
         ChartProvider.ALPACA_IEX -> DataSource.ALPACA_IEX
+        ChartProvider.EASTMONEY_EXPERIMENTAL -> DataSource.EASTMONEY_EXPERIMENTAL
     }
+
+    override suspend fun preferredChartHistory(interval: BarInterval): Duration =
+        when (settingsStore.current().chartProvider) {
+            ChartProvider.EASTMONEY_EXPERIMENTAL ->
+                EastmoneyChartCapabilities.preferredHistory(interval)
+            ChartProvider.NOT_CONFIGURED,
+            ChartProvider.ALPACA_IEX,
+            -> interval.defaultHistory()
+        }
 
     private fun ValuationProvider.toDataSource(): DataSource = when (this) {
         ValuationProvider.YAHOO_FINANCE -> DataSource.YAHOO_FINANCE
         ValuationProvider.FINNHUB -> DataSource.FINNHUB
         ValuationProvider.FMP -> DataSource.FMP
+    }
+
+    private fun BarInterval.defaultHistory(): Duration = when (this) {
+        BarInterval.ONE_MINUTE -> Duration.ofDays(1)
+        BarInterval.FIVE_MINUTES -> Duration.ofDays(5)
+        BarInterval.FIFTEEN_MINUTES,
+        BarInterval.THIRTY_MINUTES,
+        -> Duration.ofDays(30)
+        BarInterval.ONE_HOUR,
+        BarInterval.FOUR_HOURS,
+        -> Duration.ofDays(180)
+        BarInterval.ONE_DAY -> Duration.ofDays(400)
+        BarInterval.ONE_MONTH -> Duration.ofDays(3_650)
     }
 
     private class ChartSourceMismatchException : IOException(

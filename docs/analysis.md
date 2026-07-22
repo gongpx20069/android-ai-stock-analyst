@@ -96,6 +96,10 @@ Implemented level contract:
 
 - Use the current cached quote as the reference price and only valid,
   completed, split-adjusted daily bars from the selected chart source.
+- Eastmoney Experimental exposes only unadjusted `fqt=0` bars. Those bars may
+  be displayed, but they are excluded from technical indicators,
+  support/resistance, 52-week positioning, and other split-sensitive
+  calculations. Selecting Alpaca Live IEX is required for those calculations.
 - Classic pivots use the latest completed daily candle and the exact
   `PP / R1-R3 / S1-S3` formulas above.
 - Swing highs and lows use the latest 120 completed bars. A candidate must
@@ -195,7 +199,7 @@ interpretation after ranking. A price drop alone never qualifies as value.
 **Step 1: universe**
 
 - Load the NASDAQ, NYSE, and NYSE American universe from
-  [`data-sources.md` §2.5](data-sources.md#25-us-exchange-screening-universe).
+  [`data-sources.md` §2.6](data-sources.md#26-us-exchange-screening-universe).
 - Keep common stocks and data-complete ADRs; exclude ETFs, funds, warrants,
   rights, units, and preferred shares before valuation scoring.
 

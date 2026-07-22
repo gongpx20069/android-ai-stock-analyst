@@ -57,7 +57,7 @@ data class ValuationEntity(
 
 @Entity(
     tableName = "price_bars",
-    primaryKeys = ["symbol", "exchange", "interval", "startEpochMillis"],
+    primaryKeys = ["symbol", "exchange", "interval", "startEpochMillis", "source"],
 )
 data class PriceBarEntity(
     val symbol: String,

@@ -14,7 +14,7 @@
 | Responsibility | Selected source | Notes |
 |---|---|---|
 | Live quote snapshot | User choice: Auto, Tencent, or Sina | Auto uses Tencent first and Sina only on failure; explicit choices never switch silently |
-| Intraday and higher-timeframe OHLCV | User choice: Not configured or Alpaca Basic Live IEX | Alpaca is opt-in BYOK; IEX is one exchange and is never represented as consolidated SIP data |
+| Intraday and higher-timeframe OHLCV | User choice: Eastmoney Experimental, Not configured, or Alpaca Basic Live IEX | Eastmoney is the default no-account experimental source; Alpaca is opt-in BYOK and IEX is never represented as consolidated SIP data |
 | Screening universe | Nasdaq public screener | Operating-company securities listed on NASDAQ, NYSE, and NYSE American |
 | Fundamental and analyst snapshot | Yahoo Finance (default), Finnhub BYOK, or FMP BYOK | Explicit selection never falls back; snapshots are cached by symbol and actual source |
 | Derived indicators | Local Kotlin calculation engine | Deterministic indicators are calculated on-device |
@@ -28,14 +28,16 @@ Vico is not a market-data company or account requirement. It is the in-app
 open-source rendering library. A separate chart-data provider is still needed
 because candlesticks require historical open, high, low, close, and volume
 records. The validated Tencent and Sina integrations currently supply quote
-snapshots, not a reliable multi-timeframe US OHLCV contract, so Alpaca Basic is
-the current optional BYOK source for those records.
+snapshots, not a reliable multi-timeframe US OHLCV contract. Eastmoney
+Experimental supplies default no-account history through an unofficial
+interface, while Alpaca Basic remains the official-contract BYOK alternative.
 
 Provider choices are separate settings rather than one global source:
 
 - Quotes: `Auto` (default), Tencent-only, or Sina-only.
-- Charts: `Not configured` (default), or Alpaca Basic Live IEX with encrypted
-  user credentials. The setting remains independent from quote behavior.
+- Charts: Eastmoney Experimental (default, no account), `Not configured`, or
+  Alpaca Basic Live IEX with encrypted user credentials. The setting remains
+  independent from quote behavior.
 - Valuation: Yahoo Finance (default), Finnhub BYOK, or Financial Modeling Prep
   (FMP) BYOK. The setting is independent so valuation availability never
   controls quote or chart refresh.
@@ -85,8 +87,131 @@ default `Auto` quote mode.
 Sina may be selected directly. In `Auto` quote mode it is used only when
 Tencent fails, times out, or returns an invalid payload.
 
-<a id="23-alpaca-basic-live-iex-chart-contract"></a>
-### 2.3 Alpaca Basic Live IEX chart contract
+<a id="23-eastmoney-experimental-us-chart-contract"></a>
+### 2.3 Eastmoney Experimental US chart contract
+
+Eastmoney Experimental is the default chart source because it needs no
+account, API key, cookie, or project backend. It is an **unofficial and
+experimental** direct Android integration. The request and parsing contracts
+are derived from the open-source [efinance](https://github.com/Micro-sheep/efinance)
+and [AKShare](https://github.com/akfamily/akshare) clients. Those projects are
+MIT-licensed, but their software licenses do not license Eastmoney data.
+Eastmoney's own terms remain authoritative; review the
+[Eastmoney legal statement](https://about.eastmoney.com/home/legal) before
+distribution.
+
+The app sends a normal Android user agent over verified HTTPS, uses no TLS
+bypass, sends no cookie or key, and performs resolution and K-line requests
+sequentially. Quota, retention, response stability, and permission to
+redistribute or publicly display data are not contractual guarantees.
+
+#### Symbol resolution
+
+Resolve every ticker before requesting bars:
+
+```text
+GET https://search-codetable.eastmoney.com/codetable/search/web
+    ?client=web
+    &clientType=webSuggest
+    &clientVersion=lastest
+    &keyword=<URL-encoded ticker>
+    &pageIndex=1
+    &pageSize=5
+```
+
+Selection rules:
+
+- Require provider response `code == "0"`.
+- Select one and only one result whose `code` equals the query
+  case-insensitively and whose `securityTypeName` is exactly the provider's
+  US-stock label (`\u7f8e\u80a1`).
+- Build `secid` as `<market>.<code>` from the returned result.
+- Do not infer `market` from the app's exchange enum. Observed examples include
+  `105.AAPL`, `105.NVDA`, `106.IBM`, and `107.SPY`; market `107` spans security
+  categories and is not a simple exchange mapping.
+- If the exact original query has no match, conservatively retry aliases that
+  replace `.` or `-` with `_`. For example, `BRK.B` may resolve through
+  `BRK_B`. Validate the returned alias and market before caching it.
+- Reject malformed, failed, ambiguous, and non-US responses. Cache only a
+  verified symbol-to-`secid` result in memory; never guess a fallback.
+
+#### K-line request and parsing
+
+```text
+GET https://push2his.eastmoney.com/api/qt/stock/kline/get
+    ?secid=<URL-encoded secid>
+    &fields1=f1,f2,f3,f4,f5,f6
+    &fields2=f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61
+    &beg=yyyyMMdd
+    &end=yyyyMMdd
+    &klt=<interval code>
+    &fqt=0
+    &lmt=1000000
+```
+
+Supported `klt` values are `1` for 1 minute, `5` for 5 minutes, `15` for
+15 minutes, `30` for 30 minutes, `60` for 1 hour, `101` for daily, and `103`
+for monthly. Weekly bars are not used. Four-hour bars are built locally from
+completed Eastmoney hourly bars.
+
+Require response `rc == 0`, matching returned `data.code` and `data.market`,
+and a `data.klines` string array. Each CSV row is:
+
+```text
+timestamp-or-date,open,close,high,low,volume,<optional fields...>
+```
+
+The parser consumes at least the first six fields in exactly that order.
+Prices must be finite and positive; low must not exceed open or close and high
+must not be below them. Volume must be a non-negative integer. Duplicate
+normalized timestamps, malformed rows, identity mismatches, or invalid
+provider response codes fail the whole refresh. The client uses only `fqt=0`
+unadjusted values and never combines them with Alpaca's split-adjusted history.
+Because splits can create artificial discontinuities in unadjusted history,
+Eastmoney bars are chart-only: technical indicators, support/resistance,
+52-week positioning, and other split-sensitive calculations remain
+unavailable while Eastmoney is selected. Alpaca Live IEX remains the
+split-adjusted analysis source.
+The AKShare `trends2` path is never used as OHLCV because its observed `open`
+field is often zero.
+
+#### Time, completion, and capability semantics
+
+Eastmoney intraday timestamps are `Asia/Shanghai` **bar-end labels**. During US
+DST the regular session starts at `21:30` China time and the first 1-minute row
+is labeled `21:31`; the close is labeled `04:00` on the next China date. The
+client converts the label to an `Instant`, maps it into the symbol's exchange
+zone, and derives the start from a `09:30` regular-session anchor. This handles
+DST, the overnight China date, and the final Eastmoney hourly row, which spans
+only `15:30-16:00` rather than a full hour. Premarket, after-hours, and missing
+minutes are not fabricated.
+
+Daily row dates are exchange trading dates and use exchange-zone day
+boundaries. Monthly rows are stamped with the last available trading date;
+they are normalized to the containing calendar-month bucket, and the current
+incomplete month is discarded. Four-hour aggregation uses buckets anchored at
+`09:30 America/New_York`: `09:30-13:30` and `13:30-16:00`, with the final short
+session bucket allowed. Aggregation preserves Eastmoney source and exact
+available OHLCV. A 4-hour bucket is emitted only when its hourly rows cover
+the entire bucket contiguously; buckets with absent hourly rows are discarded.
+
+Only completed bars fully contained in the caller's range are returned.
+Observed, undocumented retention is approximately:
+
+| Interval | Supported request window used by Watchlist |
+|---|---|
+| 1 minute | Latest session; request the latest 1 day |
+| 5 / 15 / 30 minutes | Roughly five recent sessions; request the latest 7 calendar days |
+| 1 hour / local 4 hours | Roughly one recent month; request the latest 30 days |
+| Daily / monthly | Long history; request the product's normal 400-day / 10-year windows |
+
+These are observations, not promises. Materially older intraday requests fail
+with an explicit capability error instead of treating truncated history as a
+valid empty result. Provider failures retain only the selected source's Room
+cache; there is no automatic Alpaca fallback and no source mixing.
+
+<a id="24-alpaca-basic-live-iex-chart-contract"></a>
+### 2.4 Alpaca Basic Live IEX chart contract
 
 Alpaca Basic is an optional BYOK chart source. It is never an automatic
 fallback and is not selected until the user saves credentials and explicitly
@@ -140,7 +265,7 @@ no-trade intervals are valid empty results; malformed bars fail the refresh
 rather than being silently dropped.
 
 Only completed bars whose start and end lie inside the requested range are
-returned. Upserts use `(symbol, exchange, interval, barStart)`, so a provider
+returned. Upserts use `(symbol, exchange, interval, barStart, source)`, so a provider
 correction replaces the earlier record. Alpaca's stream may publish
 `updatedBars` after late trades; streaming correction ingestion is not yet
 implemented and must be added before continuous live chart updates.
@@ -170,8 +295,8 @@ Official contract references:
 - [Market-data FAQ](https://docs.alpaca.markets/us/docs/market-data-faq)
 - [Real-time stock data](https://docs.alpaca.markets/us/docs/real-time-stock-pricing-data)
 
-<a id="24-tencent-chart-endpoints-and-5-minute-aggregation"></a>
-### 2.4 Rejected Tencent chart endpoints and 5-minute requirement
+<a id="25-tencent-chart-endpoints-and-5-minute-aggregation"></a>
+### 2.5 Rejected Tencent chart endpoints and 5-minute requirement
 
 - Same-day intraday line:
   `GET https://web.ifzq.gtimg.cn/appstock/app/minute/query?code=usAAPL`
@@ -191,10 +316,13 @@ not return trustworthy recent US history. Tencent is therefore quote-only.
 These endpoints remain rejected even though Alpaca is now available. They
 must not be reintroduced as chart fallbacks.
 
-For the MVP, the Android app builds **completed 5-minute bars** locally by
-aggregating verified Alpaca IEX 1-minute data in exchange time. Alpaca's native
+For Alpaca, the Android app builds **completed 5-minute bars** locally by
+aggregating verified IEX 1-minute data in exchange time. Alpaca's native
 `5Min` interval is not used for the canonical five-minute refresh path. The
 rejected Tencent `m5` endpoint must not be used as replenishment or fallback.
+Eastmoney uses its provider-native 5-minute rows because its 1-minute retention
+is limited to the latest session; native Eastmoney 5-minute history must never
+be overwritten by an incomplete local minute aggregation.
 
 Local aggregation contract:
 
@@ -219,7 +347,7 @@ Local aggregation contract:
 
 Implementation requirements:
 
-- Persist bars by `(symbol, exchange, interval, barStart)`
+- Persist bars by `(symbol, exchange, interval, barStart, source)`
 - Deduplicate source overlap
 - Never use an unfinished bar as a model label or inference input
 - Normalize timestamps according to the canonical symbol and exchange-time model
@@ -229,8 +357,8 @@ Implementation requirements:
 
 ---
 
-<a id="25-us-exchange-screening-universe"></a>
-### 2.5 US exchange screening universe
+<a id="26-us-exchange-screening-universe"></a>
+### 2.6 US exchange screening universe
 
 - Fetch each exchange separately:
   - NASDAQ:
@@ -426,7 +554,7 @@ Official links:
 | Data surface | Freshness expectation | Fallback / stale behavior |
 |---|---|---|
 | Live quote snapshot | Poll every 30-60 seconds or refresh manually | Auto falls back from Tencent to Sina; explicit Tencent/Sina modes do not switch. On failure, show stale status and keep the last good timestamp visible |
-| Intraday bars for charting and ML | Use only completed Alpaca Live IEX bars when configured | If credentials, entitlement, rate limits, or gaps prevent refresh, retain Room history and mark dependent predictions stale rather than guessing |
+| Intraday bars for charting and ML | Use only completed bars from the selected Eastmoney Experimental or Alpaca Live IEX source, within that provider's capability window | Retain only the selected source's Room history and surface capability, credentials, entitlement, rate-limit, or stability failures rather than switching or guessing |
 | Daily / monthly candles | Refresh after market close or when the vendor publishes the new bar | Keep the last good history and show the chart timestamp |
 | Fundamental snapshot | Refresh on a daily cache cadence | Keep the last good cache in Room and show freshness warnings when analyst data is stale |
 | Screening cache | Refresh in WorkManager batches under network and battery constraints | Resume from the last successful stage or page instead of restarting the universe every time |
@@ -451,12 +579,14 @@ The repository layer should expose exchange-time-correct models to calculations
 and screening, while the presentation layer is responsible for converting
 timestamps to the device local timezone for display.
 
-Completed 5-minute bars are derived locally from 1-minute data and persisted as
-first-class records so screening, indicators, and the intraday model can all
-reuse the same canonical bar set.
+Alpaca completed 5-minute bars are derived locally from IEX 1-minute data and
+persisted as first-class records. Eastmoney 5-minute bars remain
+provider-native; its short 1-minute retention is never used to replace broader
+native 5-minute history. Eastmoney 4-hour bars are local aggregates of
+completed hourly rows anchored at the regular-session open.
 
 MA50, MA200, and RSI(14) are calculated on demand from the complete valid,
-completed Alpaca IEX daily history observed in Room. They are not persisted as
+completed selected-source daily history observed in Room. They are not persisted as
 provider facts. Their normalized snapshot records the latest daily-bar
 `fetchedAt` and becomes cache-stale after 24 hours without a fresher daily-bar
 refresh.
@@ -466,11 +596,14 @@ the complete normalized daily history, combined with the cached current quote.
 They remain local calculation results rather than provider facts and retain
 both quote and bar provenance plus the earlier freshness deadline.
 
-The stock-detail chart observes only the configured chart provider's Room
+The Watchlist chart observes only the configured chart provider's Room
 history. It maps timestamps to the device timezone at presentation time and
-keeps the Live IEX volume layer on an independent scale so volume cannot alter
-the price axis. Refresh failures retain visible cached bars and surface the
-provider error instead of producing an empty success state.
+keeps volume on an independent scale so volume cannot alter the price axis.
+The Room bar primary key includes source, and every replace/delete query is
+source-scoped, so switching between Eastmoney and Alpaca cannot reveal or
+overwrite the other source's history. Refresh failures retain visible
+same-source cached bars and surface the provider error instead of producing an
+empty success state.
 
 ### 4.3 Implementation checklist
 
@@ -482,8 +615,9 @@ provider error instead of producing an empty success state.
       combination, parsing, and redaction inside direct Android clients.
 - [x] Normalize quote timestamps using the canonical exchange-time model from
       [`architecture.md`](architecture.md).
-- [x] Select an opt-in US OHLCV provider with an official interval,
-      pagination, authentication, and adjustment contract.
+- [x] Implement both the default no-account Eastmoney Experimental contract
+      and the opt-in Alpaca contract with explicit capability and disclosure
+      differences.
 - [x] Record `source`, `fetchedAt`, parse status, and `staleAfter` for normalized
       quote and fundamental snapshots.
 - [x] Distinguish quote freshness from fundamental freshness in local models and
@@ -495,17 +629,23 @@ provider error instead of producing an empty success state.
 - [x] Encrypt independent Finnhub and FMP keys locally and keep FMP query-auth
       URLs out of surfaced exceptions.
 - [x] Build completed 5-minute bars locally and never infer from unfinished
-      bars.
+      bars for Alpaca; retain native Eastmoney 5-minute bars.
 - [x] Define canonical bar persistence with source, fetch time, parse status,
       interval, and exchange metadata; deduplicate by the Room primary key.
-- [x] Present cached multi-timeframe bars with device-local labels, explicit
-      Live IEX disclosure, and an independently scaled volume layer.
+- [x] Present cached multi-timeframe bars with device-local labels, dynamic
+      Eastmoney/Live-IEX disclosure, and an independently scaled volume layer.
+- [x] Resolve Eastmoney US `secid` values by exact search, parse unadjusted
+      K-lines, enforce China-label/exchange-session time semantics, aggregate
+      completed 4-hour buckets, and reject unsupported old intraday requests.
+- [x] Isolate bar observation, replacement, and fallback cache by source.
 - [ ] Persist screening progress, page cursors, and stage markers so background
       refreshes can resume cleanly.
 - [ ] Revalidate undocumented endpoints, headers, response shapes, and practical
       anti-bot limits before release.
 - [ ] Probe Alpaca Basic with user-owned credentials across every timeframe,
       split boundaries, market sessions, pagination, and rate-limit responses.
+- [ ] Re-probe Eastmoney retention, response shapes, rate behavior, and legal
+      terms before every public release; treat all observations as revocable.
 - [ ] Obtain Alpaca confirmation for open-source third-party BYOK display
       before public distribution.
 - [ ] Treat undocumented vendor behavior as revocable; add monitoring and

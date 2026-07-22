@@ -26,7 +26,7 @@ class UserSelectedChartClientTest {
     fun `Alpaca selection delegates only to Alpaca client`() = runBlocking {
         val settings = FakeChartSettingsStore(ChartProvider.ALPACA_IEX)
         val alpaca = RecordingChartClient()
-        val client = UserSelectedChartClient(settings, alpaca)
+        val client = UserSelectedChartClient(settings, alpaca, RecordingChartClient())
 
         client.fetchBars(
             symbol,
@@ -45,6 +45,7 @@ class UserSelectedChartClientTest {
             UserSelectedChartClient(
                 settingsStore = FakeChartSettingsStore(ChartProvider.NOT_CONFIGURED),
                 alpacaClient = RecordingChartClient(),
+                eastmoneyClient = RecordingChartClient(),
             ).fetchBars(
                 symbol,
                 Exchange.NASDAQ,
@@ -53,6 +54,28 @@ class UserSelectedChartClientTest {
                 end,
             )
         }
+    }
+
+    @Test
+    fun `Eastmoney selection delegates only to Eastmoney client`() = runBlocking {
+        val alpaca = RecordingChartClient()
+        val eastmoney = RecordingChartClient()
+        val client = UserSelectedChartClient(
+            settingsStore = FakeChartSettingsStore(ChartProvider.EASTMONEY_EXPERIMENTAL),
+            alpacaClient = alpaca,
+            eastmoneyClient = eastmoney,
+        )
+
+        client.fetchBars(
+            symbol,
+            Exchange.NASDAQ,
+            BarInterval.FIVE_MINUTES,
+            start,
+            end,
+        )
+
+        assertEquals(0, alpaca.callCount)
+        assertEquals(1, eastmoney.callCount)
     }
 }
 

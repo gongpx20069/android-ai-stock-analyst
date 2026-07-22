@@ -35,6 +35,7 @@ enum class DataSource {
     FINNHUB,
     FMP,
     ALPACA_IEX,
+    EASTMONEY_EXPERIMENTAL,
     LOCAL_CALCULATION,
     ONNX_RUNTIME,
 }
@@ -48,6 +49,7 @@ enum class QuoteProvider {
 enum class ChartProvider {
     NOT_CONFIGURED,
     ALPACA_IEX,
+    EASTMONEY_EXPERIMENTAL,
 }
 
 enum class ValuationProvider {
@@ -64,7 +66,7 @@ enum class AppLanguage(val languageTag: String) {
 
 data class MarketDataSourceSettings(
     val quoteProvider: QuoteProvider = QuoteProvider.AUTO,
-    val chartProvider: ChartProvider = ChartProvider.NOT_CONFIGURED,
+    val chartProvider: ChartProvider = ChartProvider.EASTMONEY_EXPERIMENTAL,
     val valuationProvider: ValuationProvider = ValuationProvider.YAHOO_FINANCE,
 )
 

@@ -156,6 +156,7 @@ interface PriceBarDao {
         WHERE symbol = :symbol
             AND exchange = :exchange
             AND interval = :interval
+            AND source = :source
             AND startEpochMillis >= :startEpochMillis
             AND endExclusiveEpochMillis <= :endExclusiveEpochMillis
         """,
@@ -164,6 +165,7 @@ interface PriceBarDao {
         symbol: String,
         exchange: String,
         interval: String,
+        source: String,
         startEpochMillis: Long,
         endExclusiveEpochMillis: Long,
     )
@@ -176,6 +178,7 @@ interface PriceBarDao {
         symbol: String,
         exchange: String,
         interval: String,
+        source: String,
         startEpochMillis: Long,
         endExclusiveEpochMillis: Long,
         entities: List<PriceBarEntity>,
@@ -184,6 +187,7 @@ interface PriceBarDao {
             symbol = symbol,
             exchange = exchange,
             interval = interval,
+            source = source,
             startEpochMillis = startEpochMillis,
             endExclusiveEpochMillis = endExclusiveEpochMillis,
         )
@@ -194,6 +198,7 @@ interface PriceBarDao {
     suspend fun replaceOneAndFiveMinuteRanges(
         symbol: String,
         exchange: String,
+        source: String,
         oneMinuteInterval: String,
         fiveMinuteInterval: String,
         startEpochMillis: Long,
@@ -205,6 +210,7 @@ interface PriceBarDao {
             symbol = symbol,
             exchange = exchange,
             interval = oneMinuteInterval,
+            source = source,
             startEpochMillis = startEpochMillis,
             endExclusiveEpochMillis = endExclusiveEpochMillis,
         )
@@ -212,6 +218,7 @@ interface PriceBarDao {
             symbol = symbol,
             exchange = exchange,
             interval = fiveMinuteInterval,
+            source = source,
             startEpochMillis = startEpochMillis,
             endExclusiveEpochMillis = endExclusiveEpochMillis,
         )
